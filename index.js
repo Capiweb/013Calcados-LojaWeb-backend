@@ -3,6 +3,7 @@ import cors from 'cors'
 import dotenv from 'dotenv'
 import cookieParser from 'cookie-parser'
 import userRoutes from './src/routes/user.routes.js'
+import authRoutes from './src/routes/auth.routes.js'
 
 dotenv.config()
 const app = express()
@@ -16,6 +17,10 @@ app.use(cors({
 app.use(express.json())
 app.use(cookieParser())
 
+// Rotas de autenticação
+app.use('/api/auth', authRoutes)
+
+// Rotas de usuários
 app.use('/api/users', userRoutes)
 
 

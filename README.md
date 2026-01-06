@@ -34,9 +34,18 @@ npm start
 ```
 src/
 ├── controllers/      # Controladores
+│   ├── auth.controller.js  # Controller de autenticação
+│   └── user.js             # Controller de usuários
 ├── middleware/       # Middlewares
+│   └── authMiddleware.js  # Middleware de autenticação JWT
+├── repositories/     # Repositórios (acesso ao banco)
+│   └── user.repository.js
 ├── routes/          # Rotas
-├── service/         # Lógica de negócio
+│   ├── auth.routes.js     # Rotas de autenticação
+│   └── user.routes.js     # Rotas de usuários
+└── service/         # Lógica de negócio
+    ├── auth.service.js    # Service de autenticação
+    └── user.js            # Service de usuários
 prisma/
 ├── schema.prisma    # Schema do banco
 └── migrations/      # Migrações
@@ -58,11 +67,33 @@ package.json
 
 ```env
 DATABASE_URL="postgresql://usuario:senha@localhost:5432/calcados_db"
-JWT_SECRET="sua-chave-secreta"
+JWT_SECRET="sua-chave-secreta-super-segura-aqui"
+JWT_EXPIRES_IN="24h"
 PORT=3000
 NODE_ENV="development"
 CORS_ORIGIN_PROD="https://seu-dominio.com"
 ```
+
+⚠️ **Importante**: Configure o `JWT_SECRET` com uma chave segura e única antes de iniciar o servidor.
+
+## 🔐 Autenticação
+
+O sistema possui um fluxo completo de autenticação com registro e login de usuários.
+
+### Endpoints de Autenticação
+
+- **POST** `/api/auth/register` - Registro de novo usuário
+- **POST** `/api/auth/login` - Login e obtenção de token JWT
+
+### Características
+
+- ✅ Criptografia de senhas com bcrypt
+- ✅ Validação de dados de entrada
+- ✅ Geração de token JWT com expiração configurável
+- ✅ Respostas enxutas (sem dados sensíveis)
+- ✅ Códigos de status HTTP adequados (400, 401, 409)
+
+Para mais detalhes, consulte [AUTH_API.md](./AUTH_API.md)
 
 ## 📖 Documentação Completa
 

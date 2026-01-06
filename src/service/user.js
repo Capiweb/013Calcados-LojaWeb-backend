@@ -1,9 +1,7 @@
 // O Service lida com a lógica de negócios e interage com o banco de dados nesse caso usando Prisma
 
-import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
-
-const prisma = new PrismaClient();
+import * as userRepository from '../repositories/user.repository.js';
 
 // C - Criar usuário
 // R - Ler usuários
@@ -13,9 +11,7 @@ const prisma = new PrismaClient();
 // C - Função para criar um usuário
 
 export const createUser = async (name, email, password) => {
-    const existingUser = await prisma.user.findUnique({
-        where: { email },
-    });
+    const existingUser = await userRepository.findUserByEmail(email);
 
     if (existingUser) {
         throw new Error('Email já está em uso');
@@ -23,46 +19,29 @@ export const createUser = async (name, email, password) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    return await prisma.user.create({
-        data: {
-            name,
-            email,
-            password: hashedPassword
-        }
+    return await userRepository.createUser({
+        name,
+        email,
+        password: hashedPassword
     });
 };
 
 // R - Função para obter todos os usuários
 
 export const getUsers = async () => {
-    return await prisma.user.findMany({
-        select: {   
-            id: true,
-            name: true,
-            email: true
-        }
-    });
+    return await userRepository.getAllUsers();
 }
 
 // R - Função para obter um usuário por ID
 
 export const getUserById = async (id) =>{
-    return await prisma.user.findUnique({
-        where: { id },
-        select: {
-            id: true,
-            name: true,
-            email: true
-        }
-    });
+    return await userRepository.findUserById(id);
 }
 
 // U - Função para atualizar um usuário
 
 export const updateUser = async (id, name, email, password) => {
-    const existingUser = await prisma.user.findUnique({
-        where: { email },
-    });
+    const existingUser = await userRepository.findUserByEmail(email);
 
     if (existingUser && existingUser.id !== id) {
         throw new Error('Email já está em uso');
@@ -70,25 +49,15 @@ export const updateUser = async (id, name, email, password) => {
 
     const hashedPassword = password ? await bcrypt.hash(password, 10) : undefined;
 
-    return await prisma.user.update({
-        where: { id },
-        data: {
-            name,
-            email,
-            ...(hashedPassword && { password: hashedPassword })
-        },
-        select: {
-            id: true,
-            name: true,
-            email: true
-        }
+    return await userRepository.updateUser(id, {
+        name,
+        email,
+        ...(hashedPassword && { password: hashedPassword })
     });
 }
 
 // D - Função para deletar um usuário
 
 export const deleteUser = async (id) => {
-    return await prisma.user.delete({
-        where: { id }
-    });
+    return await userRepository.deleteUser(id);
 }

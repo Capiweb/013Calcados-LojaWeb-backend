@@ -2,6 +2,7 @@
   "name": "base-api-crud",
   "version": "1.0.0",
   "description": "",
+  "type": "module",
   "main": "index.js",
   "dependencies": {
     "@prisma/client": "^6.16.2",
