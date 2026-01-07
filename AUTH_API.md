@@ -12,11 +12,10 @@ Registra um novo usuário no sistema.
 
 ```json
 {
-  "name": "João Silva",
+  "nome": "João Silva",
   "email": "joao@example.com",
-  "password": "senha123",
-  "confirmPassword": "senha123",
-  "address": "Rua Exemplo, 123" // Opcional
+  "senha": "senha123",
+  "confirmarSenha": "senha123"
 }
 ```
 
@@ -85,9 +84,9 @@ Autentica um usuário e retorna um token JWT.
 {
   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "user": {
-    "name": "João Silva",
+    "nome": "João Silva",
     "email": "joao@example.com",
-    "address": "Rua Exemplo, 123"
+    "enderecos": []
   }
 }
 ```
@@ -139,7 +138,7 @@ NODE_ENV="development"
 
 ## 📝 Notas Importantes
 
-1. **Payload Leve**: O login retorna apenas nome, email e endereço (sem ID, role ou informações internas)
+1. **Payload Leve**: O login retorna apenas nome, email e endereços (sem ID, role ou informações internas)
 2. **Validações**: Todas as validações são feitas no controller antes de processar a requisição
 3. **Códigos de Status**: 
    - 200: Sucesso

@@ -10,19 +10,19 @@ import * as userRepository from '../repositories/user.repository.js';
 
 // C - Função para criar um usuário
 
-export const createUser = async (name, email, password) => {
+export const createUser = async (nome, email, senha) => {
     const existingUser = await userRepository.findUserByEmail(email);
 
     if (existingUser) {
         throw new Error('Email já está em uso');
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(senha, 10);
 
     return await userRepository.createUser({
-        name,
+        nome,
         email,
-        password: hashedPassword
+        senha: hashedPassword
     });
 };
 
@@ -40,19 +40,19 @@ export const getUserById = async (id) =>{
 
 // U - Função para atualizar um usuário
 
-export const updateUser = async (id, name, email, password) => {
+export const updateUser = async (id, nome, email, senha) => {
     const existingUser = await userRepository.findUserByEmail(email);
 
     if (existingUser && existingUser.id !== id) {
         throw new Error('Email já está em uso');
     }
 
-    const hashedPassword = password ? await bcrypt.hash(password, 10) : undefined;
+    const hashedPassword = senha ? await bcrypt.hash(senha, 10) : undefined;
 
     return await userRepository.updateUser(id, {
-        name,
-        email,
-        ...(hashedPassword && { password: hashedPassword })
+        ...(nome && { nome }),
+        ...(email && { email }),
+        ...(hashedPassword && { senha: hashedPassword })
     });
 }
 

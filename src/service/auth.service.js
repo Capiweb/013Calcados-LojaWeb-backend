@@ -8,7 +8,7 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
 
 // Função para registrar um novo usuário
-export const registerUser = async (name, email, password, address = null) => {
+export const registerUser = async (nome, email, senha) => {
   // Verificar se o email já está cadastrado
   const existingUser = await userRepository.findUserByEmail(email);
   
@@ -17,27 +17,25 @@ export const registerUser = async (name, email, password, address = null) => {
   }
 
   // Criptografar a senha
-  const hashedPassword = await bcrypt.hash(password, 10);
+  const hashedPassword = await bcrypt.hash(senha, 10);
 
   // Criar usuário no banco
   const newUser = await userRepository.createUser({
-    name,
+    nome,
     email,
-    password: hashedPassword,
-    address,
+    senha: hashedPassword,
   });
 
   // Retornar dados sem informações sensíveis
   return {
     id: newUser.id,
-    name: newUser.name,
+    nome: newUser.nome,
     email: newUser.email,
-    address: newUser.address,
   };
 };
 
 // Função para fazer login
-export const loginUser = async (email, password) => {
+export const loginUser = async (email, senha) => {
   // Buscar usuário por email
   const user = await userRepository.findUserByEmail(email);
   
@@ -46,7 +44,7 @@ export const loginUser = async (email, password) => {
   }
 
   // Comparar senha informada com o hash salvo
-  const isPasswordValid = await bcrypt.compare(password, user.password);
+  const isPasswordValid = await bcrypt.compare(senha, user.senha);
   
   if (!isPasswordValid) {
     throw new Error('Credenciais inválidas');
@@ -68,9 +66,9 @@ export const loginUser = async (email, password) => {
   return {
     token,
     user: {
-      name: user.name,
+      nome: user.nome,
       email: user.email,
-      address: user.address || null,
+      enderecos: user.enderecos || [],
     },
   };
 };

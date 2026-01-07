@@ -5,55 +5,66 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 export const findUserByEmail = async (email) => {
-  return await prisma.user.findUnique({
+  return await prisma.usuario.findUnique({
     where: { email },
+    include: {
+      enderecos: {
+        select: {
+          id: true,
+          rua: true,
+          numero: true,
+          complemento: true,
+          bairro: true,
+          cidade: true,
+          estado: true,
+          cep: true,
+        },
+      },
+    },
   });
 };
 
 export const findUserById = async (id) => {
-  return await prisma.user.findUnique({
+  return await prisma.usuario.findUnique({
     where: { id },
     select: {
       id: true,
-      name: true,
+      nome: true,
       email: true,
-      address: true,
     },
   });
 };
 
 export const createUser = async (userData) => {
-  return await prisma.user.create({
+  return await prisma.usuario.create({
     data: userData,
   });
 };
 
 export const getAllUsers = async () => {
-  return await prisma.user.findMany({
+  return await prisma.usuario.findMany({
     select: {
       id: true,
-      name: true,
+      nome: true,
       email: true,
-      address: true,
     },
   });
 };
 
 export const updateUser = async (id, userData) => {
-  return await prisma.user.update({
+  return await prisma.usuario.update({
     where: { id },
     data: userData,
     select: {
       id: true,
-      name: true,
+      nome: true,
       email: true,
-      address: true,
     },
   });
 };
 
 export const deleteUser = async (id) => {
-  return await prisma.user.delete({
+  return await prisma.usuario.delete({
     where: { id },
   });
 };

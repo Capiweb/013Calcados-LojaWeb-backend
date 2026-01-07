@@ -1,27 +1,28 @@
 // O Controller lida com a lógica de entrada e saída fazendo validações e chamando o serviço apropriado
 
 import * as userService from '../service/user.js';
+import { logError } from '../utils/logger.js';
 
 export const createUser = async (req, res) => {
     try {
-        const { name, email, password } = req.body;
+        const { nome, email, senha } = req.body;
 
-        if (!name || !email || !password) {
+        if (!nome || !email || !senha) {
             return res.status(400).json({ error: 'Nome, email e senha são obrigatórios.' });
         }
 
-        const newUser = await userService.createUser(name, email, password);
+        const newUser = await userService.createUser(nome, email, senha);
 
         process.env.NODE_ENV === 'development' && console.log('Usuário criado:', newUser);
 
         return res.status(201).json({
             id: newUser.id,
-            name: newUser.name,
+            nome: newUser.nome,
             email: newUser.email
         });
 
     } catch (error) {
-        console.error('Erro ao criar usuário:', error.message);
+        logError('user.create', error, { body: req.body });
         
         if (error.message === 'Email já está em uso') {
             return res.status(400).json({ error: error.message });
@@ -36,7 +37,7 @@ export const getUsers = async (req, res) => {
         const users = await userService.getUsers();
         return res.status(200).json(users);
     } catch (error) {
-        console.error('Erro ao buscar usuários:', error.message);
+        logError('user.getAll', error);
         return res.status(500).json({ error: 'Erro ao buscar usuários, tente novamente.' });
     }
 };
@@ -44,13 +45,13 @@ export const getUsers = async (req, res) => {
 export const getUserById = async (req, res) => {
     try {
         const { id } = req.params;
-        const user = await userService.getUserById(parseInt(id));
+        const user = await userService.getUserById(id);
         if (!user) {
             return res.status(404).json({ error: 'Usuário não encontrado.' });
         }
         return res.status(200).json(user);
     } catch (error) {
-        console.error('Erro ao buscar usuário:', error.message);
+        logError('user.getById', error, { params: req.params });
         return res.status(500).json({ error: 'Erro ao buscar usuário, tente novamente.' });
     }   
 };
@@ -58,18 +59,18 @@ export const getUserById = async (req, res) => {
 export const updateUser = async (req, res) => {
     try {
         const { id } = req.params;
-        const { name, email, password } = req.body;
-        const updatedUser = await userService.updateUser(parseInt(id), name, email, password);
+        const { nome, email, senha } = req.body;
+        const updatedUser = await userService.updateUser(id, nome, email, senha);
         if (!updatedUser) {
             return res.status(404).json({ error: 'Usuário não encontrado.' });
         }
         return res.status(200).json({
             id: updatedUser.id,
-            name: updatedUser.name,
+            nome: updatedUser.nome,
             email: updatedUser.email
         });
     } catch (error) {
-        console.error('Erro ao atualizar usuário:', error.message);     
+        logError('user.update', error, { params: req.params, body: req.body });     
         if (error.message === 'Email já está em uso') {
             return res.status(400).json({ error: error.message });
         }
@@ -80,13 +81,13 @@ export const updateUser = async (req, res) => {
 export const deleteUser = async (req, res) => {
     try {
         const { id } = req.params;
-        const deletedUser = await userService.deleteUser(parseInt(id));
+        const deletedUser = await userService.deleteUser(id);
         if (!deletedUser) {
             return res.status(404).json({ error: 'Usuário não encontrado.' });
         }
         return res.status(200).json({ message: 'Usuário deletado com sucesso.' });
     } catch (error) {
-        console.error('Erro ao deletar usuário:', error.message);
+        logError('user.delete', error, { params: req.params });
         return res.status(500).json({ error: 'Erro ao deletar usuário, tente novamente.' });
     }
 };
