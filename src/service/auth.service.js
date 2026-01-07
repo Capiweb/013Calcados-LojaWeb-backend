@@ -73,3 +73,19 @@ export const loginUser = async (email, senha) => {
   };
 };
 
+// Função para buscar usuário por ID
+export const getUserById = async (userId) => {
+  const user = await userRepository.findUserById(userId);
+  
+  if (!user) {
+    throw new Error('Usuário não encontrado');
+  }
+
+  return {
+    id: user.id,
+    nome: user.nome,
+    email: user.email,
+    papel: user.papel,
+  };
+};
+

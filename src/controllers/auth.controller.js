@@ -121,3 +121,69 @@ export const login = async (req, res) => {
   }
 };
 
+// Endpoint para verificar autenticação
+export const check = async (req, res) => {
+  try {
+    const userId = req.userId;
+
+    if (!userId) {
+      return res.status(401).json({
+        error: 'Usuário não autenticado',
+      });
+    }
+
+    // Buscar dados do usuário
+    const user = await authService.getUserById(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        error: 'Usuário não encontrado',
+      });
+    }
+
+    return res.status(200).json({
+      authenticated: true,
+    });
+  } catch (error) {
+    logError('auth.check', error);
+
+    return res.status(500).json({
+      error: 'Erro ao verificar autenticação',
+    });
+  }
+};
+
+// Endpoint para verificar se é admin
+export const isAdmin = async (req, res) => {
+  try {
+    const userId = req.userId;
+
+    if (!userId) {
+      return res.status(401).json({
+        error: 'Usuário não autenticado',
+      });
+    }
+
+    // Buscar dados do usuário
+    const user = await authService.getUserById(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        error: 'Usuário não encontrado',
+      });
+    }
+
+    const isUserAdmin = user.papel === 'ADMIN';
+
+    return res.status(200).json({
+      isAdmin: isUserAdmin,
+    });
+  } catch (error) {
+    logError('auth.isAdmin', error);
+
+    return res.status(500).json({
+      error: 'Erro ao verificar permissões de admin',
+    });
+  }
+};
+
