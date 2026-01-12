@@ -88,4 +88,3 @@ export const getUserById = async (userId) => {
     papel: user.papel,
   };
 };
-

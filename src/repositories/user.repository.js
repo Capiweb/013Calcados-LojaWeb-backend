@@ -36,6 +36,51 @@ export const findUserById = async (id) => {
   });
 };
 
+export const getUserFullProfile = async (id) => {
+  return await prisma.usuario.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      nome: true,
+      email: true,
+      papel: true,
+      criadoEm: true,
+      atualizadoEm: true,
+      enderecos: {
+        select: {
+          id: true,
+          rua: true,
+          numero: true,
+          complemento: true,
+          bairro: true,
+          cidade: true,
+          estado: true,
+          cep: true,
+          criadoEm: true,
+        },
+      },
+      pedidos: {
+        select: {
+          id: true,
+          status: true,
+          criadoEm: true,
+          atualizadoEm: true,
+        },
+        orderBy: {
+          criadoEm: 'desc',
+        },
+      },
+      carrinho: {
+        select: {
+          id: true,
+          criadoEm: true,
+          atualizadoEm: true,
+        },
+      },
+    },
+  });
+};
+
 export const createUser = async (userData) => {
   return await prisma.usuario.create({
     data: userData,

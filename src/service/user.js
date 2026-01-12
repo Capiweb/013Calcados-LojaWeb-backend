@@ -38,6 +38,12 @@ export const getUserById = async (id) =>{
     return await userRepository.findUserById(id);
 }
 
+// R - Função para obter o perfil completo de um usuário
+
+export const getUserFullProfile = async (id) =>{
+    return await userRepository.getUserFullProfile(id);
+}
+
 // U - Função para atualizar um usuário
 
 export const updateUser = async (id, nome, email, senha) => {
