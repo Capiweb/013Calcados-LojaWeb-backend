@@ -189,12 +189,14 @@
 import { Router } from 'express';
 import { register, login, check, isAdmin } from '../controllers/auth.controller.js';
 import { authMiddleware } from '../middleware/authMiddleware.js';
+import { validate } from '../middleware/validateMiddleware.js';
+import { RegisterSchema, LoginSchema } from '../validators/auth.validator.js';
 
 const router = Router();
 
-router.post('/register', register);
+router.post('/register', validate(RegisterSchema), register);
 
-router.post('/login', login);
+router.post('/login', validate(LoginSchema), login);
 
 router.get('/check', authMiddleware, check);
 

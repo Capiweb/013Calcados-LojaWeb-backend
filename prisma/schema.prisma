@@ -48,10 +48,15 @@ model Usuario {
   carrinho      Carrinho?
   pedidos       Pedido[]
   enderecos     Endereco[]
+  favoritos     Produto[]
 
   criadoEm      DateTime @default(now())
   atualizadoEm  DateTime @updatedAt
 }
+
+/* Nota: a tabela de favoritos é um relacionamento many-to-many entre Usuario e Produto.
+  Usamos aqui um relacionamento implícito (Prisma cria a tabela de junção automaticamente).
+*/
 
 /* =======================
    ENDEREÇO
@@ -104,6 +109,7 @@ model Produto {
   categoria       Categoria @relation(fields: [categoriaId], references: [id])
 
   variacoes       ProdutoVariacao[]
+  favoritadoPor   Usuario[]
 
   criadoEm        DateTime @default(now())
   atualizadoEm    DateTime @updatedAt

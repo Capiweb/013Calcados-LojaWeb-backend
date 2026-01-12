@@ -145,6 +145,72 @@ const options = {
             },
           },
         },
+        ProductCreate: {
+          type: 'object',
+          properties: {
+            nome: { type: 'string' },
+            descricao: { type: 'string' },
+            preco: { type: 'number' },
+            emPromocao: { type: 'boolean' },
+            precoPromocional: { type: 'number' },
+            slug: { type: 'string' },
+            imagemUrl: { type: 'string' },
+            categoriaId: { type: 'string', format: 'uuid' },
+            variacoes: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  tipoTamanho: { type: 'string', enum: ['NUMERICO', 'LETRA'] },
+                  tamanho: { type: 'string' },
+                  estoque: { type: 'integer' },
+                  sku: { type: 'string' },
+                },
+              },
+            },
+          },
+          required: ['nome', 'descricao', 'preco', 'slug', 'imagemUrl', 'categoriaId', 'variacoes'],
+        },
+        CategoryCreate: {
+          type: 'object',
+          properties: {
+            nome: { type: 'string' },
+            slug: { type: 'string' },
+          },
+          required: ['nome', 'slug'],
+        },
+        CheckoutRequest: {
+          type: 'object',
+          properties: {
+            endereco: {
+              type: 'object',
+              properties: {
+                rua: { type: 'string' },
+                numero: { type: 'string' },
+                complemento: { type: 'string' },
+                bairro: { type: 'string' },
+                cidade: { type: 'string' },
+                estado: { type: 'string' },
+                cep: { type: 'string' },
+              },
+            },
+          },
+        },
+        Cart: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            itens: { type: 'array', items: { type: 'object' } },
+            total: { type: 'number' },
+          },
+        },
+        CheckoutResponse: {
+          type: 'object',
+          properties: {
+            preference_url: { type: 'string' },
+            preference_id: { type: 'string' },
+          },
+        },
       },
     },
   },
