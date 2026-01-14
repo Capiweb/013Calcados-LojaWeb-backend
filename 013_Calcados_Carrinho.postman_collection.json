@@ -1,0 +1,288 @@
+{
+  "info": {
+    "_postman_id": "013-calcados-carrinho-collection",
+    "name": "013 Calçados - Carrinho",
+    "description": "Collection completa para testar o sistema de carrinho da API 013 Calçados",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Login",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"seu.email@exemplo.com\",\n  \"senha\": \"suaSenha123\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/auth/login",
+          "host": ["{{base_url}}"],
+          "path": ["api", "auth", "login"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "  const data = pm.response.json();",
+              "  pm.environment.set(\"token\", data.token);",
+              "  pm.environment.set(\"userId\", data.user.id);",
+              "  pm.test(\"Login bem-sucedido\", function () {",
+              "    pm.expect(pm.response.code).to.equal(200);",
+              "    pm.expect(data.token).to.exist;",
+              "  });",
+              "  console.log(\"✅ Token salvo:\", data.token.substring(0, 20) + \"...\");",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Obter Carrinho (Vazio)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/orders/cart",
+          "host": ["{{base_url}}"],
+          "path": ["api", "orders", "cart"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "  const data = pm.response.json();",
+              "  pm.environment.set(\"carrinhoId\", data.id);",
+              "  pm.test(\"Carrinho obtido com sucesso\", function () {",
+              "    pm.expect(pm.response.code).to.equal(200);",
+              "    pm.expect(data.id).to.exist;",
+              "  });",
+              "  console.log(\"✅ Carrinho ID:\", data.id);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Adicionar Item ao Carrinho",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"produtoVariacaoId\": \"UUID-DA-VARIACAO-AQUI\",\n  \"quantidade\": 1\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/orders/cart",
+          "host": ["{{base_url}}"],
+          "path": ["api", "orders", "cart"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 201) {",
+              "  const data = pm.response.json();",
+              "  pm.environment.set(\"itemId\", data.id);",
+              "  pm.test(\"Item adicionado com sucesso\", function () {",
+              "    pm.expect(pm.response.code).to.equal(201);",
+              "    pm.expect(data.id).to.exist;",
+              "    pm.expect(data.quantidade).to.equal(1);",
+              "  });",
+              "  console.log(\"✅ Item adicionado:\", data.id);",
+              "} else if (pm.response.code === 400) {",
+              "  pm.test(\"Erro: Verifique se o UUID da variação está correto\", function () {",
+              "    pm.expect(pm.response.code).to.equal(400);",
+              "  });",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Adicionar Segundo Item",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"produtoVariacaoId\": \"OUTRO-UUID-VARIACAO\",\n  \"quantidade\": 2\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/orders/cart",
+          "host": ["{{base_url}}"],
+          "path": ["api", "orders", "cart"]
+        }
+      }
+    },
+    {
+      "name": "5. Obter Carrinho com Itens",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/orders/cart",
+          "host": ["{{base_url}}"],
+          "path": ["api", "orders", "cart"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "  const data = pm.response.json();",
+              "  pm.test(\"Carrinho contém itens\", function () {",
+              "    pm.expect(pm.response.code).to.equal(200);",
+              "    pm.expect(data.itens).to.be.an('array');",
+              "    pm.expect(data.itens.length).to.be.greaterThan(0);",
+              "  });",
+              "  console.log(\"✅ Carrinho com\", data.itens.length, \"itens\");",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Remover Item do Carrinho",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/orders/cart/items/{{itemId}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "orders", "cart", "items", "{{itemId}}"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Item removido com sucesso\", function () {",
+              "  pm.expect(pm.response.code).to.equal(204);",
+              "});",
+              "console.log(\"✅ Item removido\");"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Checkout",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"endereco\": {\n    \"rua\": \"Rua das Flores\",\n    \"numero\": \"123\",\n    \"complemento\": \"Apto 45\",\n    \"bairro\": \"Centro\",\n    \"cidade\": \"São Paulo\",\n    \"estado\": \"SP\",\n    \"cep\": \"01310-100\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/orders/checkout",
+          "host": ["{{base_url}}"],
+          "path": ["api", "orders", "checkout"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "  const data = pm.response.json();",
+              "  pm.test(\"Checkout realizado com sucesso\", function () {",
+              "    pm.expect(pm.response.code).to.equal(200);",
+              "    pm.expect(data.init_point).to.exist;",
+              "    pm.expect(data.preference.id).to.exist;",
+              "  });",
+              "  console.log(\"✅ Link Mercado Pago:\", data.init_point.substring(0, 50) + \"...\");",
+              "}"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "userId",
+      "value": ""
+    },
+    {
+      "key": "carrinhoId",
+      "value": ""
+    },
+    {
+      "key": "itemId",
+      "value": ""
+    }
+  ]
+}

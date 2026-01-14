@@ -1,0 +1,264 @@
+{
+  "exemplos_post_carrinho": {
+    "descricao": "Exemplos de JSON para POST /api/orders/cart",
+    "basico": {
+      "descricao": "Exemplo básico - Adicionar 1 item ao carrinho",
+      "metodo": "POST",
+      "url": "http://localhost:3000/api/orders/cart",
+      "headers": {
+        "Authorization": "Bearer {seu_token_jwt}",
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "produtoVariacaoId": "550e8400-e29b-41d4-a716-446655440000",
+        "quantidade": 1
+      }
+    },
+    "multiplos_itens": {
+      "descricao": "Exemplos para adicionar diferentes quantidades",
+      "exemplo_1": {
+        "descricao": "Adicionar 2 unidades",
+        "body": {
+          "produtoVariacaoId": "550e8400-e29b-41d4-a716-446655440000",
+          "quantidade": 2
+        }
+      },
+      "exemplo_2": {
+        "descricao": "Adicionar 5 unidades",
+        "body": {
+          "produtoVariacaoId": "660e8400-e29b-41d4-a716-446655440001",
+          "quantidade": 5
+        }
+      },
+      "exemplo_3": {
+        "descricao": "Adicionar 10 unidades",
+        "body": {
+          "produtoVariacaoId": "770e8400-e29b-41d4-a716-446655440002",
+          "quantidade": 10
+        }
+      }
+    },
+    "produtos_reais": {
+      "descricao": "Padrão esperado para produtos reais",
+      "exemplo_tenis": {
+        "descricao": "Tênis tamanho 39",
+        "body": {
+          "produtoVariacaoId": "a1b2c3d4-e5f6-4789-a012-b3c4d5e6f7a8",
+          "quantidade": 1
+        },
+        "response": {
+          "id": "item-001",
+          "quantidade": 1,
+          "carrinhoId": "carrinho-001",
+          "produtoVariacaoId": "a1b2c3d4-e5f6-4789-a012-b3c4d5e6f7a8",
+          "criadoEm": "2026-01-12T10:45:00Z"
+        }
+      },
+      "exemplo_camisa": {
+        "descricao": "Camisa tamanho P",
+        "body": {
+          "produtoVariacaoId": "b2c3d4e5-f6a7-4890-b123-c4d5e6f7a8b9",
+          "quantidade": 3
+        },
+        "response": {
+          "id": "item-002",
+          "quantidade": 3,
+          "carrinhoId": "carrinho-001",
+          "produtoVariacaoId": "b2c3d4e5-f6a7-4890-b123-c4d5e6f7a8b9",
+          "criadoEm": "2026-01-12T10:46:00Z"
+        }
+      }
+    },
+    "erros_comuns": {
+      "descricao": "Exemplos de requisições que resultarão em erro",
+      "erro_1_sem_quantidade": {
+        "descricao": "Falta campo quantidade",
+        "body": {
+          "produtoVariacaoId": "550e8400-e29b-41d4-a716-446655440000"
+        },
+        "response": {
+          "error": "Erro de validação",
+          "details": [
+            {
+              "field": "quantidade",
+              "message": "quantidade é obrigatória"
+            }
+          ]
+        }
+      },
+      "erro_2_sem_variacao": {
+        "descricao": "Falta campo produtoVariacaoId",
+        "body": {
+          "quantidade": 1
+        },
+        "response": {
+          "error": "Erro de validação",
+          "details": [
+            {
+              "field": "produtoVariacaoId",
+              "message": "produtoVariacaoId é obrigatório"
+            }
+          ]
+        }
+      },
+      "erro_3_quantidade_negativa": {
+        "descricao": "Quantidade negativa (inválida)",
+        "body": {
+          "produtoVariacaoId": "550e8400-e29b-41d4-a716-446655440000",
+          "quantidade": -1
+        },
+        "response": {
+          "error": "Erro de validação",
+          "details": [
+            {
+              "field": "quantidade",
+              "message": "quantidade deve ser maior que 0"
+            }
+          ]
+        }
+      },
+      "erro_4_uuid_invalido": {
+        "descricao": "UUID inválido",
+        "body": {
+          "produtoVariacaoId": "nao-eh-uuid-valido",
+          "quantidade": 1
+        },
+        "response": {
+          "error": "Erro de validação",
+          "details": [
+            {
+              "field": "produtoVariacaoId",
+              "message": "produtoVariacaoId deve ser um UUID válido"
+            }
+          ]
+        }
+      },
+      "erro_5_variacao_nao_existe": {
+        "descricao": "UUID válido mas variação não existe",
+        "body": {
+          "produtoVariacaoId": "00000000-0000-0000-0000-000000000000",
+          "quantidade": 1
+        },
+        "response": {
+          "error": "Variação de produto não encontrada"
+        }
+      },
+      "erro_6_nao_autenticado": {
+        "descricao": "Sem token de autenticação",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "produtoVariacaoId": "550e8400-e29b-41d4-a716-446655440000",
+          "quantidade": 1
+        },
+        "response": {
+          "error": "Não autenticado"
+        },
+        "status": 401
+      }
+    },
+    "caso_de_uso_real": {
+      "descricao": "Sequência completa de um cliente adicionando itens",
+      "passo_1_login": {
+        "descricao": "Cliente faz login",
+        "metodo": "POST",
+        "url": "http://localhost:3000/api/auth/login",
+        "body": {
+          "email": "cliente@exemplo.com",
+          "senha": "senha123"
+        },
+        "response": {
+          "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+          "user": {
+            "id": "user-001",
+            "nome": "João Silva",
+            "email": "cliente@exemplo.com"
+          }
+        }
+      },
+      "passo_2_adicionar_tenis": {
+        "descricao": "Cliente adiciona um tênis ao carrinho",
+        "metodo": "POST",
+        "url": "http://localhost:3000/api/orders/cart",
+        "headers": {
+          "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "produtoVariacaoId": "a1b2c3d4-e5f6-4789-a012-b3c4d5e6f7a8",
+          "quantidade": 1
+        }
+      },
+      "passo_3_adicionar_camisa": {
+        "descricao": "Cliente adiciona uma camisa ao carrinho",
+        "metodo": "POST",
+        "url": "http://localhost:3000/api/orders/cart",
+        "headers": {
+          "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "produtoVariacaoId": "b2c3d4e5-f6a7-4890-b123-c4d5e6f7a8b9",
+          "quantidade": 2
+        }
+      },
+      "passo_4_visualizar_carrinho": {
+        "descricao": "Cliente visualiza seu carrinho completo",
+        "metodo": "GET",
+        "url": "http://localhost:3000/api/orders/cart",
+        "headers": {
+          "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        },
+        "response": {
+          "id": "carrinho-001",
+          "usuarioId": "user-001",
+          "itens": [
+            {
+              "id": "item-001",
+              "quantidade": 1,
+              "carrinhoId": "carrinho-001",
+              "produtoVariacaoId": "a1b2c3d4-e5f6-4789-a012-b3c4d5e6f7a8",
+              "produtoVariacao": {
+                "id": "a1b2c3d4-e5f6-4789-a012-b3c4d5e6f7a8",
+                "tipoTamanho": "NUMERICO",
+                "tamanho": "39",
+                "estoque": 15,
+                "sku": "SKU-TENIS-39",
+                "produto": {
+                  "id": "produto-001",
+                  "nome": "Tênis Air Max",
+                  "preco": 299.99,
+                  "imagemUrl": "https://..."
+                }
+              },
+              "criadoEm": "2026-01-12T10:45:00Z"
+            },
+            {
+              "id": "item-002",
+              "quantidade": 2,
+              "carrinhoId": "carrinho-001",
+              "produtoVariacaoId": "b2c3d4e5-f6a7-4890-b123-c4d5e6f7a8b9",
+              "produtoVariacao": {
+                "id": "b2c3d4e5-f6a7-4890-b123-c4d5e6f7a8b9",
+                "tipoTamanho": "LETRA",
+                "tamanho": "P",
+                "estoque": 20,
+                "sku": "SKU-CAMISA-P",
+                "produto": {
+                  "id": "produto-002",
+                  "nome": "Camisa Casual",
+                  "preco": 89.99,
+                  "imagemUrl": "https://..."
+                }
+              },
+              "criadoEm": "2026-01-12T10:46:00Z"
+            }
+          ],
+          "criadoEm": "2026-01-12T09:00:00Z",
+          "atualizadoEm": "2026-01-12T10:46:00Z"
+        }
+      }
+    }
+  }
+}

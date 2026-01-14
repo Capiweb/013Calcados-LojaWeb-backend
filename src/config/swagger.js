@@ -6,20 +6,58 @@ const options = {
     info: {
       title: 'API - 013 Calçados',
       version: '1.0.0',
-      description: 'Documentação da API de autenticação e gerenciamento de usuários',
+      description: 'Documentação completa da API de e-commerce da 013 Calçados',
+      termsOfService: 'http://swagger.io/terms/',
       contact: {
-        name: 'Support',
+        name: 'Suporte da API',
         url: 'https://github.com/Capiweb/013Calcados-LojaWeb-backend',
+        email: 'suporte@013calcados.com.br',
+      },
+      license: {
+        name: 'Apache 2.0',
+        url: 'http://www.apache.org/licenses/LICENSE-2.0.html',
       },
     },
     servers: [
       {
         url: `http://localhost:${process.env.PORT || 3000}`,
         description: 'Servidor de desenvolvimento',
+        variables: {
+          protocol: {
+            enum: ['http', 'https'],
+            default: 'http',
+          },
+        },
       },
       {
         url: process.env.PRODUCTION_URL || 'https://api.exemplo.com',
         description: 'Servidor de produção',
+      },
+    ],
+    tags: [
+      {
+        name: 'Autenticação',
+        description: 'Endpoints de autenticação e verificação de token',
+      },
+      {
+        name: 'Usuários',
+        description: 'Gerenciamento de usuários e perfis',
+      },
+      {
+        name: 'Produtos',
+        description: 'Catálogo de produtos',
+      },
+      {
+        name: 'Categorias',
+        description: 'Categorias de produtos',
+      },
+      {
+        name: 'Pedidos',
+        description: 'Carrinho e pedidos',
+      },
+      {
+        name: 'Webhooks',
+        description: 'Webhooks de pagamento',
       },
     ],
     components: {
@@ -28,7 +66,7 @@ const options = {
           type: 'http',
           scheme: 'bearer',
           bearerFormat: 'JWT',
-          description: 'JWT Authorization header usando o esquema Bearer',
+          description: 'JWT Authorization header usando o esquema Bearer token',
         },
         cookieAuth: {
           type: 'apiKey',
@@ -38,6 +76,7 @@ const options = {
         },
       },
       schemas: {
+        /* ========== SCHEMAS DE USUÁRIO ========== */
         Usuario: {
           type: 'object',
           properties: {
@@ -45,23 +84,72 @@ const options = {
               type: 'string',
               format: 'uuid',
               description: 'ID único do usuário',
+              example: '123e4567-e89b-12d3-a456-426614174000',
             },
             nome: {
               type: 'string',
               description: 'Nome completo do usuário',
+              example: 'João Silva Santos',
             },
             email: {
               type: 'string',
               format: 'email',
               description: 'Email do usuário',
+              example: 'joao@exemplo.com',
             },
             papel: {
               type: 'string',
               enum: ['USUARIO', 'ADMIN'],
               description: 'Papel do usuário no sistema',
+              example: 'USUARIO',
+            },
+            criadoEm: {
+              type: 'string',
+              format: 'date-time',
+              description: 'Data e hora de criação',
+            },
+            atualizadoEm: {
+              type: 'string',
+              format: 'date-time',
+              description: 'Data e hora da última atualização',
             },
           },
           required: ['id', 'nome', 'email', 'papel'],
+        },
+        UsuarioFullProfile: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            nome: { type: 'string' },
+            email: { type: 'string', format: 'email' },
+            papel: { type: 'string', enum: ['USUARIO', 'ADMIN'] },
+            criadoEm: { type: 'string', format: 'date-time' },
+            atualizadoEm: { type: 'string', format: 'date-time' },
+            enderecos: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/Endereco' },
+            },
+            pedidos: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/Pedido' },
+            },
+            carrinho: { $ref: '#/components/schemas/Carrinho' },
+          },
+        },
+        Endereco: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            rua: { type: 'string', example: 'Rua das Flores' },
+            numero: { type: 'string', example: '123' },
+            complemento: { type: 'string', example: 'Apto 45' },
+            bairro: { type: 'string', example: 'Centro' },
+            cidade: { type: 'string', example: 'São Paulo' },
+            estado: { type: 'string', example: 'SP' },
+            cep: { type: 'string', example: '01310-100' },
+            criadoEm: { type: 'string', format: 'date-time' },
+          },
+          required: ['rua', 'numero', 'bairro', 'cidade', 'estado', 'cep'],
         },
         RegisterRequest: {
           type: 'object',
@@ -70,11 +158,12 @@ const options = {
               type: 'string',
               description: 'Nome completo do usuário',
               example: 'João Silva',
+              minLength: 3,
             },
             email: {
               type: 'string',
               format: 'email',
-              description: 'Email do usuário',
+              description: 'Email único do usuário',
               example: 'joao@exemplo.com',
             },
             senha: {
@@ -82,11 +171,12 @@ const options = {
               format: 'password',
               description: 'Senha (mínimo 6 caracteres)',
               example: 'senha123',
+              minLength: 6,
             },
             confirmarSenha: {
               type: 'string',
               format: 'password',
-              description: 'Confirmação de senha',
+              description: 'Confirmação de senha (deve ser igual à senha)',
               example: 'senha123',
             },
           },
@@ -115,33 +205,328 @@ const options = {
           properties: {
             token: {
               type: 'string',
-              description: 'Token JWT para autenticação',
+              description: 'Token JWT para autenticação em requisições futuras',
+              example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
             },
             user: {
               type: 'object',
               properties: {
-                nome: {
-                  type: 'string',
-                },
-                email: {
-                  type: 'string',
-                },
+                id: { type: 'string', format: 'uuid' },
+                nome: { type: 'string' },
+                email: { type: 'string', format: 'email' },
+                papel: { type: 'string', enum: ['USUARIO', 'ADMIN'] },
                 enderecos: {
                   type: 'array',
-                  items: {
-                    type: 'object',
-                  },
+                  items: { $ref: '#/components/schemas/Endereco' },
                 },
               },
             },
           },
         },
+        CheckAuthResponse: {
+          type: 'object',
+          properties: {
+            authenticated: { type: 'boolean' },
+            user: { $ref: '#/components/schemas/Usuario' },
+          },
+        },
+        IsAdminResponse: {
+          type: 'object',
+          properties: {
+            isAdmin: { type: 'boolean' },
+            user: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', format: 'uuid' },
+                nome: { type: 'string' },
+                papel: { type: 'string', enum: ['USUARIO', 'ADMIN'] },
+              },
+            },
+          },
+        },
+
+        /* ========== SCHEMAS DE PRODUTO E CATEGORIA ========== */
+        Categoria: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            nome: { type: 'string', example: 'Tênis' },
+            slug: { type: 'string', example: 'tenis', description: 'Slug único da categoria' },
+            criadoEm: { type: 'string', format: 'date-time' },
+          },
+          required: ['id', 'nome', 'slug'],
+        },
+        CategoryCreate: {
+          type: 'object',
+          properties: {
+            nome: {
+              type: 'string',
+              description: 'Nome da categoria',
+              example: 'Tênis',
+            },
+            slug: {
+              type: 'string',
+              description: 'Slug único da categoria (sem espaços, minúsculas)',
+              example: 'tenis',
+            },
+          },
+          required: ['nome', 'slug'],
+        },
+        ProdutoVariacao: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            tipoTamanho: { type: 'string', enum: ['NUMERICO', 'LETRA'], description: 'Tipo de tamanho' },
+            tamanho: { type: 'string', example: '39', description: 'Valor do tamanho' },
+            estoque: { type: 'integer', example: 15, description: 'Quantidade em estoque' },
+            sku: { type: 'string', example: 'SKU-123456', description: 'SKU único do produto' },
+            criadoEm: { type: 'string', format: 'date-time' },
+          },
+          required: ['tipoTamanho', 'tamanho', 'estoque', 'sku'],
+        },
+        Produto: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            nome: { type: 'string', example: 'Tênis Air Max' },
+            descricao: { type: 'string', example: 'Tênis esportivo premium' },
+            preco: { type: 'number', format: 'decimal', example: 299.99 },
+            emPromocao: { type: 'boolean', example: false },
+            precoPromocional: { type: 'number', format: 'decimal', nullable: true, example: 199.99 },
+            slug: { type: 'string', example: 'tenis-air-max' },
+            imagemUrl: { type: 'string', format: 'url' },
+            categoriaId: { type: 'string', format: 'uuid' },
+            categoria: { $ref: '#/components/schemas/Categoria' },
+            variacoes: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/ProdutoVariacao' },
+            },
+            criadoEm: { type: 'string', format: 'date-time' },
+            atualizadoEm: { type: 'string', format: 'date-time' },
+          },
+          required: ['id', 'nome', 'descricao', 'preco', 'slug', 'imagemUrl', 'categoriaId'],
+        },
+        ProductCreate: {
+          type: 'object',
+          properties: {
+            nome: {
+              type: 'string',
+              description: 'Nome do produto',
+              example: 'Tênis Air Max',
+            },
+            descricao: {
+              type: 'string',
+              description: 'Descrição detalhada do produto',
+              example: 'Tênis esportivo de alta performance',
+            },
+            preco: {
+              type: 'number',
+              format: 'decimal',
+              description: 'Preço original',
+              example: 299.99,
+            },
+            emPromocao: {
+              type: 'boolean',
+              description: 'Se produto está em promoção',
+              example: false,
+            },
+            precoPromocional: {
+              type: 'number',
+              format: 'decimal',
+              nullable: true,
+              description: 'Preço promocional (opcional)',
+              example: 199.99,
+            },
+            slug: {
+              type: 'string',
+              description: 'Slug único do produto',
+              example: 'tenis-air-max',
+            },
+            imagemUrl: {
+              type: 'string',
+              format: 'url',
+              description: 'URL da imagem do produto',
+            },
+            categoriaId: {
+              type: 'string',
+              format: 'uuid',
+              description: 'ID da categoria',
+            },
+            variacoes: {
+              type: 'array',
+              description: 'Variações do produto (tamanhos)',
+              items: {
+                type: 'object',
+                properties: {
+                  tipoTamanho: { type: 'string', enum: ['NUMERICO', 'LETRA'] },
+                  tamanho: { type: 'string', example: '39' },
+                  estoque: { type: 'integer', example: 10 },
+                  sku: { type: 'string', example: 'SKU-123' },
+                },
+                required: ['tipoTamanho', 'tamanho', 'estoque', 'sku'],
+              },
+            },
+          },
+          required: ['nome', 'descricao', 'preco', 'slug', 'imagemUrl', 'categoriaId', 'variacoes'],
+        },
+
+        /* ========== SCHEMAS DE PEDIDO E CARRINHO ========== */
+        CarrinhoItem: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            quantidade: { type: 'integer', example: 2 },
+            produtoVariacao: { $ref: '#/components/schemas/ProdutoVariacao' },
+            criadoEm: { type: 'string', format: 'date-time' },
+          },
+        },
+        Carrinho: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            usuarioId: { type: 'string', format: 'uuid' },
+            itens: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/CarrinhoItem' },
+            },
+            criadoEm: { type: 'string', format: 'date-time' },
+            atualizadoEm: { type: 'string', format: 'date-time' },
+          },
+        },
+        PedidoItem: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            quantidade: { type: 'integer' },
+            preco: { type: 'number', format: 'decimal' },
+            produtoVariacao: { $ref: '#/components/schemas/ProdutoVariacao' },
+          },
+        },
+        Pagamento: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            pedidoId: { type: 'string', format: 'uuid' },
+            provedor: { type: 'string', example: 'mercado_pago' },
+            pagamentoId: { type: 'string', description: 'ID do pagamento no provedor' },
+            status: {
+              type: 'string',
+              enum: ['PENDENTE', 'APROVADO', 'REJEITADO', 'REEMBOLSADO'],
+              example: 'PENDENTE',
+            },
+            criadoEm: { type: 'string', format: 'date-time' },
+          },
+        },
+        Pedido: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            usuarioId: { type: 'string', format: 'uuid' },
+            status: {
+              type: 'string',
+              enum: ['PENDENTE', 'PAGO', 'CANCELADO', 'ENVIADO', 'ENTREGUE'],
+              example: 'PENDENTE',
+            },
+            total: { type: 'number', format: 'decimal' },
+            rua: { type: 'string' },
+            numero: { type: 'string' },
+            complemento: { type: 'string', nullable: true },
+            bairro: { type: 'string' },
+            cidade: { type: 'string' },
+            estado: { type: 'string' },
+            cep: { type: 'string' },
+            itens: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/PedidoItem' },
+            },
+            pagamento: { $ref: '#/components/schemas/Pagamento' },
+            criadoEm: { type: 'string', format: 'date-time' },
+            atualizadoEm: { type: 'string', format: 'date-time' },
+          },
+        },
+        AddToCartRequest: {
+          type: 'object',
+          properties: {
+            produtoVariacaoId: {
+              type: 'string',
+              format: 'uuid',
+              description: 'ID da variação do produto',
+            },
+            quantidade: {
+              type: 'integer',
+              description: 'Quantidade a adicionar',
+              example: 1,
+            },
+          },
+          required: ['produtoVariacaoId', 'quantidade'],
+        },
+        CheckoutRequest: {
+          type: 'object',
+          properties: {
+            endereco: {
+              type: 'object',
+              description: 'Endereço de entrega',
+              properties: {
+                rua: { type: 'string' },
+                numero: { type: 'string' },
+                complemento: { type: 'string' },
+                bairro: { type: 'string' },
+                cidade: { type: 'string' },
+                estado: { type: 'string' },
+                cep: { type: 'string' },
+              },
+              required: ['rua', 'numero', 'bairro', 'cidade', 'estado', 'cep'],
+            },
+          },
+          required: ['endereco'],
+        },
+        CheckoutResponse: {
+          type: 'object',
+          properties: {
+            preference_url: {
+              type: 'string',
+              format: 'url',
+              description: 'URL para pagamento no Mercado Pago',
+            },
+            preference_id: {
+              type: 'string',
+              description: 'ID da preferência no Mercado Pago',
+            },
+          },
+        },
+
+        /* ========== SCHEMAS DE ERRO ========== */
         ErrorResponse: {
           type: 'object',
           properties: {
             error: {
               type: 'string',
               description: 'Mensagem de erro',
+              example: 'Email já cadastrado',
+            },
+            message: {
+              type: 'string',
+              description: 'Detalhes adicionais do erro',
+            },
+            code: {
+              type: 'string',
+              description: 'Código de erro',
+            },
+          },
+        },
+        ValidationError: {
+          type: 'object',
+          properties: {
+            error: { type: 'string', example: 'Erro de validação' },
+            details: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  field: { type: 'string' },
+                  message: { type: 'string' },
+                },
+              },
             },
           },
         },

@@ -48,10 +48,16 @@ model Usuario {
   carrinho      Carrinho?
   pedidos       Pedido[]
   enderecos     Endereco[]
+  favoritos     Produto[]
+  feedbacks     Feedback[]
 
   criadoEm      DateTime @default(now())
   atualizadoEm  DateTime @updatedAt
 }
+
+/* Nota: a tabela de favoritos é um relacionamento many-to-many entre Usuario e Produto.
+  Usamos aqui um relacionamento implícito (Prisma cria a tabela de junção automaticamente).
+*/
 
 /* =======================
    ENDEREÇO
@@ -100,10 +106,14 @@ model Produto {
   slug            String   @unique
   imagemUrl       String
 
+  estrelas        Float    @default(0) // média de avaliações (0.5, 1.0, 1.5, ..., 5.0, 5.5)
+
   categoriaId     String
   categoria       Categoria @relation(fields: [categoriaId], references: [id])
 
   variacoes       ProdutoVariacao[]
+  favoritadoPor   Usuario[]
+  feedbacks       Feedback[]
 
   criadoEm        DateTime @default(now())
   atualizadoEm    DateTime @updatedAt
@@ -213,4 +223,26 @@ model Pagamento {
   status        StatusPagamento
 
   criadoEm      DateTime         @default(now())
+}
+
+/* =======================
+   FEEDBACK / AVALIAÇÃO
+======================= */
+model Feedback {
+  id              String   @id @default(uuid())
+  
+  usuarioId       String
+  usuario         Usuario  @relation(fields: [usuarioId], references: [id])
+  
+  produtoId       String
+  produto         Produto  @relation(fields: [produtoId], references: [id])
+  
+  estrelas        Float    // avaliação em estrelas (1.0, 1.5, 2.0, ..., 5.0, 5.5)
+  comentario      String?  // comentário opcional
+  
+  criadoEm        DateTime @default(now())
+  atualizadoEm    DateTime @updatedAt
+
+  // Garantir que um usuário não pode avaliar o mesmo produto mais de uma vez
+  @@unique([usuarioId, produtoId])
 }
