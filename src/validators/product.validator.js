@@ -4,6 +4,7 @@ export const VariacaoSchema = z.object({
   tipoTamanho: z.enum(['NUMERICO', 'LETRA']),
   tamanho: z.string(),
   estoque: z.number().int().nonnegative(),
+  cores: z.array(z.string()).optional(),
   sku: z.string(),
 })
 

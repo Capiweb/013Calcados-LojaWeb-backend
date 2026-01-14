@@ -57,11 +57,36 @@ const router = express.Router()
  *     responses:
  *       200:
  *         description: Lista paginada de produtos
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ProductListResponse'
  *
  */
 router.post('/', authMiddleware, adminMiddleware, validate(ProductCreateSchema), productController.create)
 router.post('/bulk', authMiddleware, adminMiddleware, validate(ProductBulkSchema), productController.createBulk)
 router.get('/', productController.getAll)
+/**
+ * @swagger
+ * /api/products/{id}:
+ *   get:
+ *     summary: Obter produto por id (com variacoes e cores)
+ *     tags:
+ *       - Produtos
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Produto encontrado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ProductDetailResponse'
+ */
 router.get('/:id', productController.getById)
 router.put('/:id', authMiddleware, adminMiddleware, productController.update)
 router.delete('/:id', authMiddleware, adminMiddleware, productController.remove)

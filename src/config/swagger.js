@@ -359,9 +359,10 @@ const options = {
                 type: 'object',
                 properties: {
                   tipoTamanho: { type: 'string', enum: ['NUMERICO', 'LETRA'] },
-                  tamanho: { type: 'string', example: '39' },
-                  estoque: { type: 'integer', example: 10 },
-                  sku: { type: 'string', example: 'SKU-123' },
+                  tamanho: { type: 'string' },
+                  estoque: { type: 'integer' },
+                  sku: { type: 'string' },
+                  cores: { type: 'array', items: { type: 'string' }, description: 'Array de cores disponíveis para a variação' },
                 },
                 required: ['tipoTamanho', 'tamanho', 'estoque', 'sku'],
               },
@@ -517,18 +518,65 @@ const options = {
         ValidationError: {
           type: 'object',
           properties: {
-            error: { type: 'string', example: 'Erro de validação' },
-            details: {
+            preference_url: { type: 'string' },
+            preference_id: { type: 'string' },
+          },
+        },
+        Product: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            nome: { type: 'string' },
+            descricao: { type: 'string' },
+            preco: { type: 'number' },
+            emPromocao: { type: 'boolean' },
+            precoPromocional: { type: 'number' },
+            slug: { type: 'string' },
+            imagemUrl: { type: 'string' },
+            categoria: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', format: 'uuid' },
+                nome: { type: 'string' },
+                slug: { type: 'string' }
+              }
+            },
+            variacoes: {
               type: 'array',
               items: {
                 type: 'object',
                 properties: {
-                  field: { type: 'string' },
-                  message: { type: 'string' },
-                },
-              },
+                  id: { type: 'string', format: 'uuid' },
+                  tipoTamanho: { type: 'string' },
+                  tamanho: { type: 'string' },
+                  estoque: { type: 'integer' },
+                  sku: { type: 'string' },
+                  cores: { type: 'array', items: { type: 'string' } },
+                  criadoEm: { type: 'string', format: 'date-time' }
+                }
+              }
             },
-          },
+            criadoEm: { type: 'string', format: 'date-time' },
+            atualizadoEm: { type: 'string', format: 'date-time' }
+          }
+        },
+        ProductListResponse: {
+          type: 'object',
+          properties: {
+            page: { type: 'integer' },
+            limit: { type: 'integer' },
+            total: { type: 'integer' },
+            totalPages: { type: 'integer' },
+            produtos: {
+              type: 'array',
+              items: {
+                $ref: '#/components/schemas/Product'
+              }
+            }
+          }
+        },
+        ProductDetailResponse: {
+          $ref: '#/components/schemas/Product'
         },
       },
     },
