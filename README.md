@@ -115,6 +115,80 @@ Endpoints de produtos:
 
 > Nota: as operações de escrita (`POST`, `PUT`, `DELETE`, `/bulk`) exigem autenticação e papel `ADMIN`. A listagem (`GET /api/products`) é pública (apenas leitura).
 
+Mudança no schema: cores nas variações
+-------------------------------------------------
+Foi adicionada uma nova coluna em `ProdutoVariacao`: `cores` do tipo `String[]` (array de strings). Isso permite que cada variação tenha um conjunto de cores disponíveis (por exemplo: ["preto","branco"]).
+
+O fluxo suportado agora é:
+- Ao criar produto (POST /api/products ou /api/products/bulk) cada variação pode receber `cores: ["cor1","cor2"]`.
+- Ao consultar produtos (GET /api/products) e produto por id (GET /api/products/:id), a resposta incluirá `variacoes`, e cada variação terá o campo `cores`.
+
+Exemplo: resposta de GET /api/products (lista resumida) — cada produto contém lista de variacoes com cores no objeto completo retornado por /:id, mas a listagem resumida mantém campos principais:
+
+```json
+{
+    "page": 1,
+    "limit": 10,
+    "total": 3,
+    "totalPages": 1,
+    "produtos": [
+        {
+            "id": "...",
+            "nome": "Tênis Runner X",
+            "slug": "tenis-runner-x",
+            "imagemUrl": "https://...",
+            "preco": 349.9,
+            "emPromocao": true,
+            "precoPromocional": 299.9
+        }
+    ]
+}
+```
+
+Exemplo: resposta de GET /api/products/:id (produto completo com variacoes + cores):
+
+```json
+{
+    "id": "uuid-do-produto",
+    "nome": "Tênis Runner X",
+    "descricao": "Tênis leve para corrida...",
+    "preco": 349.9,
+    "emPromocao": true,
+    "precoPromocional": 299.9,
+    "slug": "tenis-runner-x",
+    "imagemUrl": "https://...",
+    "categoria": {
+        "id": "ec978b1e-d3e9-42d9-9633-eab1f78c0dcf",
+        "nome": "Tenis",
+        "slug": "tenis"
+    },
+    "variacoes": [
+        {
+            "id": "uuid-var-1",
+            "tipoTamanho": "NUMERICO",
+            "tamanho": "40",
+            "estoque": 12,
+            "sku": "RUNX-40-BK",
+            "cores": ["preto", "branco"],
+            "criadoEm": "2026-01-14T00:00:00.000Z"
+        },
+        {
+            "id": "uuid-var-2",
+            "tipoTamanho": "NUMERICO",
+            "tamanho": "41",
+            "estoque": 8,
+            "sku": "RUNX-41-BK",
+            "cores": ["preto"],
+            "criadoEm": "2026-01-14T00:00:00.000Z"
+        }
+    ]
+}
+```
+
+Observações:
+- O campo `cores` é opcional nas variações; se ausente, será um array vazio no banco.
+- Após alterar o schema Prisma foi necessário gerar uma migration e aplicar no banco para que o campo exista fisicamente (veja seção de Prisma / migrations neste README).
+
 ## Categorias
 
 Endpoints de categorias:

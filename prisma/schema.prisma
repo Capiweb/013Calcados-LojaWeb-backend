@@ -104,6 +104,7 @@ model Produto {
 
   slug            String   @unique
   imagemUrl       String
+  estrelas        Float?
 
   categoriaId     String
   categoria       Categoria @relation(fields: [categoriaId], references: [id])
@@ -121,11 +122,12 @@ model Produto {
 model ProdutoVariacao {
   id            String   @id @default(uuid())
   produtoId     String
-  produto       Produto  @relation(fields: [produtoId], references: [id])
+  produto       Produto  @relation(fields: [produtoId], references: [id], onDelete: Cascade)
 
   tipoTamanho   TipoTamanho
   tamanho       String      // "39", "41", "M", "GG"
   estoque       Int
+  cores         String[]
   sku           String   @unique
 
   itensCarrinho CarrinhoItem[]
@@ -140,7 +142,7 @@ model ProdutoVariacao {
 model Carrinho {
   id          String   @id @default(uuid())
   usuarioId   String   @unique
-  usuario     Usuario @relation(fields: [usuarioId], references: [id])
+  usuario     Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
   itens       CarrinhoItem[]
 
@@ -159,7 +161,7 @@ model CarrinhoItem {
   carrinho            Carrinho @relation(fields: [carrinhoId], references: [id])
 
   produtoVariacaoId   String
-  produtoVariacao     ProdutoVariacao @relation(fields: [produtoVariacaoId], references: [id])
+  produtoVariacao     ProdutoVariacao @relation(fields: [produtoVariacaoId], references: [id], onDelete: Cascade)
 
   criadoEm            DateTime @default(now())
 }
@@ -203,7 +205,7 @@ model PedidoItem {
   pedido              Pedido  @relation(fields: [pedidoId], references: [id])
 
   produtoVariacaoId   String
-  produtoVariacao     ProdutoVariacao @relation(fields: [produtoVariacaoId], references: [id])
+  produtoVariacao     ProdutoVariacao @relation(fields: [produtoVariacaoId], references: [id], onDelete: Cascade)
 }
 
 /* =======================

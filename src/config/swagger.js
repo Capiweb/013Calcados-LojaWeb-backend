@@ -165,6 +165,7 @@ const options = {
                   tamanho: { type: 'string' },
                   estoque: { type: 'integer' },
                   sku: { type: 'string' },
+                  cores: { type: 'array', items: { type: 'string' }, description: 'Array de cores disponíveis para a variação' },
                 },
               },
             },
@@ -210,6 +211,62 @@ const options = {
             preference_url: { type: 'string' },
             preference_id: { type: 'string' },
           },
+        },
+        Product: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            nome: { type: 'string' },
+            descricao: { type: 'string' },
+            preco: { type: 'number' },
+            emPromocao: { type: 'boolean' },
+            precoPromocional: { type: 'number' },
+            slug: { type: 'string' },
+            imagemUrl: { type: 'string' },
+            categoria: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', format: 'uuid' },
+                nome: { type: 'string' },
+                slug: { type: 'string' }
+              }
+            },
+            variacoes: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string', format: 'uuid' },
+                  tipoTamanho: { type: 'string' },
+                  tamanho: { type: 'string' },
+                  estoque: { type: 'integer' },
+                  sku: { type: 'string' },
+                  cores: { type: 'array', items: { type: 'string' } },
+                  criadoEm: { type: 'string', format: 'date-time' }
+                }
+              }
+            },
+            criadoEm: { type: 'string', format: 'date-time' },
+            atualizadoEm: { type: 'string', format: 'date-time' }
+          }
+        },
+        ProductListResponse: {
+          type: 'object',
+          properties: {
+            page: { type: 'integer' },
+            limit: { type: 'integer' },
+            total: { type: 'integer' },
+            totalPages: { type: 'integer' },
+            produtos: {
+              type: 'array',
+              items: {
+                $ref: '#/components/schemas/Product'
+              }
+            }
+          }
+        },
+        ProductDetailResponse: {
+          $ref: '#/components/schemas/Product'
         },
       },
     },
