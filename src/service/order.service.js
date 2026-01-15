@@ -143,3 +143,8 @@ export const handleMpNotification = async (body) => {
 
   return { ok: true, mpStatus: data.status }
 }
+
+export const listAllOrders = async (filters = {}) => {
+  // filters can include where conditions; default returns all orders ordered by createdAt desc
+  return orderRepo.findAllOrders(filters)
+}

@@ -17,3 +17,7 @@ export const linkPayment = async (pedidoId, pagamentoData) => {
 export const getOrderById = async (id) => {
   return prisma.pedido.findUnique({ where: { id }, include: { itens: true, pagamento: true } })
 }
+
+export const findAllOrders = async ({ where = {}, orderBy = { createdAt: 'desc' }, include = { itens: true, pagamento: true, usuario: true } } = {}) => {
+  return prisma.pedido.findMany({ where, orderBy, include })
+}

@@ -55,3 +55,20 @@ export const checkout = async (req, res) => {
     return res.status(500).json({ error: 'Erro ao criar checkout' })
   }
 }
+
+export const getAllOrders = async (req, res) => {
+  try {
+    // optional query filters could be passed (status, userId, date range)
+    const filters = {}
+    // map query params to prisma where if provided
+    const { status, userId } = req.query
+    if (status) filters.where = { ...(filters.where || {}), status }
+    if (userId) filters.where = { ...(filters.where || {}), usuarioId: userId }
+
+    const pedidos = await orderService.listAllOrders(filters)
+    return res.status(200).json(pedidos)
+  } catch (error) {
+    console.error(error)
+    return res.status(500).json({ error: 'Erro ao obter pedidos' })
+  }
+}
