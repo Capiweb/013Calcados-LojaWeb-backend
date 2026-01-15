@@ -68,7 +68,14 @@ export const getAllOrders = async (req, res) => {
     const pedidos = await orderService.listAllOrders(filters)
     return res.status(200).json(pedidos)
   } catch (error) {
-    console.error(error)
-    return res.status(500).json({ error: 'Erro ao obter pedidos' })
+    console.error('getAllOrders error:', error)
+    // include request context in logs
+    console.error('req.query:', req.query, 'req.userId:', req.userId)
+    const payload = { error: 'Erro ao obter pedidos' }
+    if (process.env.NODE_ENV === 'development') {
+      payload.details = error.message
+      payload.stack = error.stack
+    }
+    return res.status(500).json(payload)
   }
 }

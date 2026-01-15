@@ -18,6 +18,14 @@ export const getOrderById = async (id) => {
   return prisma.pedido.findUnique({ where: { id }, include: { itens: true, pagamento: true } })
 }
 
-export const findAllOrders = async ({ where = {}, orderBy = { createdAt: 'desc' }, include = { itens: true, pagamento: true, usuario: true } } = {}) => {
-  return prisma.pedido.findMany({ where, orderBy, include })
+export const findAllOrders = async ({ where = {}, orderBy = { criadoEm: 'desc' }, include = { itens: true, pagamento: true, usuario: true } } = {}) => {
+  try {
+    return await prisma.pedido.findMany({ where, orderBy, include })
+  } catch (err) {
+    // If a validation error occurs (deployed DB/schema mismatch), retry with safer include
+    if (err?.name === 'PrismaClientValidationError' || err?.code === 'P2022') {
+      return prisma.pedido.findMany({ where, orderBy: { criadoEm: 'desc' }, include: { itens: true, pagamento: true } })
+    }
+    throw err
+  }
 }

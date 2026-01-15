@@ -11,18 +11,48 @@ export const getOrCreateCartByUser = async (usuarioId) => {
 }
 
 export const getCartWithItems = async (usuarioId) => {
-  return prisma.carrinho.findUnique({
-    where: { usuarioId },
-    include: {
-      itens: {
-        include: {
-          produtoVariacao: {
-            include: { produto: true }
+  try {
+    return await prisma.carrinho.findUnique({
+      where: { usuarioId },
+      include: {
+        itens: {
+          include: {
+            produtoVariacao: {
+              include: { produto: true }
+            }
           }
         }
       }
+    })
+  } catch (err) {
+    // If the DB doesn't have the new 'cores' column yet (migration not applied),
+    // Prisma may throw P2022 referencing ProdutoVariacao.cores. In that case,
+    // retry with a safer select that avoids reading the missing column.
+    if (err?.code === 'P2022' || (err?.message && err.message.includes('ProdutoVariacao.cores'))) {
+      return prisma.carrinho.findUnique({
+        where: { usuarioId },
+        include: {
+          itens: {
+            include: {
+              produtoVariacao: {
+                select: {
+                  id: true,
+                  produtoId: true,
+                  tipoTamanho: true,
+                  tamanho: true,
+                  estoque: true,
+                  sku: true,
+                  criadoEm: true
+                },
+                include: { produto: true }
+              }
+            }
+          }
+        }
+      })
     }
-  })
+    throw err
+  }
 }
 
 export const addOrUpdateCartItem = async (usuarioId, produtoVariacaoId, quantidade) => {
