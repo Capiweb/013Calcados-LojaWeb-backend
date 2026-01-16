@@ -12,6 +12,7 @@ import orderRoutes from './src/routes/order.routes.js'
 import webhookRoutes from './src/routes/webhook.routes.js'
 import feedbackRoutes from './src/routes/feedback.routes.js'
 import debugRoutes from './src/routes/debug.routes.js'
+import favoriteRoutes from './src/routes/favorite.routes.js'
 const app = express()
 
 app.use(cors({
@@ -41,6 +42,9 @@ app.use('/api/products', productRoutes)
 
 // Rotas de categorias
 app.use('/api/categories', categoryRoutes)
+
+// Rotas de categorias
+app.use('/api/favorites', favoriteRoutes)
 
 // Rotas de pedido/carrinho
 app.use('/api/orders', orderRoutes)
