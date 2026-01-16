@@ -6,6 +6,13 @@ import * as productRepo from '../repositories/product.repository.js'
 const MP_ACCESS_TOKEN = process.env.MP_ACCESS_TOKEN
 const MP_BASE = 'https://api.mercadopago.com'
 
+const maskToken = (t = '') => {
+  if (!t) return '<missing>'
+  const clean = String(t).trim()
+  if (clean.length <= 12) return `${clean.slice(0, 3)}...${clean.slice(-3)}`
+  return `${clean.slice(0, 6)}...${clean.slice(-6)}`
+}
+
 export const getCart = async (userId) => {
   return cartRepo.getCartWithItems(userId)
 }
@@ -60,10 +67,11 @@ export const createOrderFromCart = async (userId, endereco) => {
   return pedido
 }
 
+
 export const createMercadoPagoPreference = async (pedido) => {
   if (!MP_ACCESS_TOKEN) throw new Error('MP_ACCESS_TOKEN não configurado')
 
-  const itens = pedido.itens.map((it) => ({
+  const itens = (pedido.itens || []).map((it) => ({
     title: `Produto ${it.produtoVariacaoId}`,
     quantity: it.quantidade,
     unit_price: Number(it.preco),
@@ -72,15 +80,46 @@ export const createMercadoPagoPreference = async (pedido) => {
 
   const body = {
     items: itens,
+    external_reference: pedido.id || undefined,
     back_urls: {
       success: process.env.MP_BACK_URL_SUCCESS || 'https://seusite.com/success',
       failure: process.env.MP_BACK_URL_FAILURE || 'https://seusite.com/failure',
       pending: process.env.MP_BACK_URL_PENDING || 'https://seusite.com/pending'
     },
-    notification_url: process.env.MP_NOTIFICATION_URL || null
+    notification_url: process.env.MP_NOTIFICATION_URL || undefined
   }
 
-  const res = await fetch(`${MP_BASE}/v1/checkout/preferences`, {
+  const url = `${MP_BASE}/v1/checkout/preferences`
+  // Debug logs (temporarily) - do not commit secrets to public logs
+  try {
+    console.log('MP request url:', url)
+    console.log('MP request headers: Authorization: Bearer <REDACTED>, Content-Type: application/json')
+    console.log('MP request body:', JSON.stringify(body, null, 2))
+  } catch (e) {
+    // ignore logging errors
+  }
+
+  // quick token check to surface clearer error if token is invalid
+  if (MP_ACCESS_TOKEN) {
+    try {
+      const check = await fetch(`${MP_BASE}/v1/users/me`, { headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` } })
+      if (!check.ok) {
+        const txt = await check.text()
+        // Provide a friendly, actionable hint when MP returns 404 for token check
+        let hint = ''
+        if (check.status === 404) {
+          hint = ` Possible causes: you may be using the Public Key (frontend) instead of the Access Token, the token belongs to a different environment/account, or the account isn't enabled for this API. Check Mercado Pago Dashboard > Credentials and copy the Access Token (not the Public Key).`
+        }
+        throw new Error(`MP token check failed: ${check.status} ${txt}. Token(${maskToken(MP_ACCESS_TOKEN)})${hint}`)
+      }
+    } catch (err) {
+      // rethrow with context and masked token
+      if (String(err.message).includes('MP token check failed')) throw err
+      throw new Error(`MP token validation error: ${err.message}. Token=${maskToken(MP_ACCESS_TOKEN)}`)
+    }
+  }
+
+  const res = await fetch(url, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${MP_ACCESS_TOKEN}`,
@@ -126,9 +165,32 @@ export const handleMpNotification = async (body) => {
   const mpStatus = data.status
   const mapped = statusMap[mpStatus] || 'PENDENTE'
 
-  // localizar pagamento no DB e atualizar
-  const pagamento = await orderRepo.createOrUpdatePaymentRecord ? null : null
-  // NOTE: Implementação simplificada - depende de encontrar pagamento pelo pagamentoId
+  // criar ou atualizar registro de pagamento no DB
+  // tentar localizar registro de pagamento já criado (vinculado à preference no checkout)
+  const existingByPagamentoId = await orderRepo.findPaymentByPagamentoId(paymentId)
+
+  // tentar buscar pedido via payment object (external_reference or preference_id)
+  const pedidoIdFromMp = data.external_reference || data.preference_id || null
+
+  if (existingByPagamentoId) {
+    // já existe um registro com este paymentId -> apenas atualizar status
+    await orderRepo.updatePaymentStatus(paymentId, mapped)
+  } else if (pedidoIdFromMp) {
+    // se MP retornou external_reference (pedidoId) ou preference_id, tente vincular
+    // buscar pagamento já atrelado ao pedido (por exemplo, preferência criada no checkout)
+    const existingByPedido = await orderRepo.findPaymentByPedidoId(pedidoIdFromMp)
+    if (existingByPedido) {
+      // atualizar o pagamento existente para registrar o novo pagamentoId e status
+      await orderRepo.updatePaymentId(existingByPedido.pagamentoId, paymentId)
+      await orderRepo.updatePaymentStatus(paymentId, mapped)
+    } else {
+      // criar novo pagamento vinculado ao pedido
+      await orderRepo.createPaymentForPedido(pedidoIdFromMp, paymentId, { provedor: 'mercado_pago', status: mapped })
+    }
+  } else {
+    // último recurso: criar registro de pagamento sem pedido (será necessário reconciliar manualmente)
+    await orderRepo.linkPayment(null, { provedor: 'mercado_pago', pagamentoId: paymentId, status: mapped })
+  }
 
   // quando aprovado, decrementar estoque dos itens do pedido
   if (mapped === 'APROVADO') {
@@ -136,10 +198,28 @@ export const handleMpNotification = async (body) => {
     const pedido = await orderRepo.getOrderByPaymentId(paymentId)
     if (pedido && pedido.itens) {
       for (const it of pedido.itens) {
+        // decrementStock returns number of rows affected
         await productRepo.decrementStock(it.produtoVariacaoId, it.quantidade)
       }
     }
   }
 
   return { ok: true, mpStatus: data.status }
+}
+
+export const listAllOrders = async (filters = {}) => {
+  // filters can include where conditions; default returns all orders ordered by createdAt desc
+  return orderRepo.findAllOrders(filters)
+}
+
+export const getOrderById = async (id) => {
+  return orderRepo.getOrderById(id)
+}
+
+export const listAllCarts = async () => {
+  return cartRepo.findAllCarts()
+}
+
+export const getCartById = async (id) => {
+  return cartRepo.findCartById(id)
 }
