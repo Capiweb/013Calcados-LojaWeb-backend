@@ -1,34 +1,7 @@
 import * as productRepo from '../repositories/product.repository.js'
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
 
 export const createProduct = async (payload) => {
-  // payload esperada com 'variacoes' array
-  const { variacoes = [], ...productData } = payload
-
-  // transação para criar produto e variações
-  const result = await prisma.$transaction(async (tx) => {
-    const produto = await tx.produto.create({
-      data: {
-        ...productData,
-        variacoes: {
-          create: variacoes.map((v) => ({
-            tipoTamanho: v.tipoTamanho,
-            tamanho: v.tamanho,
-            estoque: v.estoque,
-            sku: v.sku,
-            cores: v.cores || [],
-          })),
-        },
-      },
-      include: { categoria: true, variacoes: true },
-    })
-
-    return produto
-  })
-
-  return result
+  return productRepo.createProduct(payload)
 }
 
 export const createProductsBulk = async (products) => {
@@ -36,35 +9,13 @@ export const createProductsBulk = async (products) => {
     throw new Error('Payload inválido: espere um array de produtos')
   }
 
-  const result = await prisma.$transaction(async (tx) => {
-    const created = []
+  const created = []
+  for (const p of products) {
+    const prod = await productRepo.createProduct(p)
+    created.push(prod)
+  }
 
-    for (const payload of products) {
-      const { variacoes = [], ...productData } = payload
-
-      const produto = await tx.produto.create({
-        data: {
-          ...productData,
-          variacoes: {
-            create: variacoes.map((v) => ({
-              tipoTamanho: v.tipoTamanho,
-              tamanho: v.tamanho,
-              estoque: v.estoque,
-              sku: v.sku,
-              cores: v.cores || [],
-            })),
-          },
-        },
-        include: { categoria: true, variacoes: true },
-      })
-
-      created.push(produto)
-    }
-
-    return created
-  })
-
-  return result
+  return created
 }
 
 // Monta where a partir dos filtros query

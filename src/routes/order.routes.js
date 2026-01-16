@@ -128,4 +128,20 @@ router.post('/checkout', authMiddleware, validate(CheckoutSchema), orderControll
  */
 router.get('/admin', authMiddleware, adminMiddleware, orderController.getAllOrders)
 
+/**
+ * @swagger
+ * /api/orders/carts:
+ *   get:
+ *     summary: List all carts (admin)
+ *     tags:
+ *       - Carrinho
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: OK
+ */
+router.get('/carts', authMiddleware, adminMiddleware, orderController.getAllCarts)
+router.get('/carts/:id', authMiddleware, adminMiddleware, orderController.getCartById)
+
 export default router
