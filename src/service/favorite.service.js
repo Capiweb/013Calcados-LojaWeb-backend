@@ -1,5 +1,5 @@
-import * as favoriteRepo from '../repositories/favorite.repository'
-import * as produtcRepo from '../repositories/product.repository'
+import * as favoriteRepo from '../repositories/favorite.repository.js'
+import * as produtcRepo from '../repositories/product.repository.js'
 
 //Favoritar o produto
 export const createFavorite = async ({usuarioId, produtoId}) =>{
@@ -12,23 +12,23 @@ export const createFavorite = async ({usuarioId, produtoId}) =>{
         throw error;
     }
 
-    // 2. Regra: Impedimento de duplicidade [1, 2]
+    // Impedimento de duplicidade 
   // Não permitir que o mesmo usuário favorite o mesmo produto mais de uma vez
   const alreadyExistsFavorite = await favoriteRepo.findSpecific(usuarioId, produtoId);
   if (alreadyExistsFavorite) {
     const error = new Error('Produto já favoritado');
-    error.status = 409; // Padronização exigida para conflito [2]
+    error.status = 409; // Padronização exigida para conflito 
     throw error;
   }
 
-  // 3. Persistência correta no banco [1, 3]
+  //Persistência correta no banco 
   return await favoriteRepo.create(usuarioId, produtoId);
 };
 
 
 //Desfavoritar
 export const deleteFavorite = async (usuarioId, produtoId) => {
-  // 1. Regra: O produto deve estar favoritado previamente pelo usuário [1]
+  //O produto deve estar favoritado previamente pelo usuário [1]
   const favorito = await favoriteRepo.findSpecific(usuarioId, produtoId);
   
   if (!favorito) {
@@ -37,7 +37,7 @@ export const deleteFavorite = async (usuarioId, produtoId) => {
     throw error;
   }
 
-  // 2. Remover o registro do banco através do repositório [1]
+  //Remover o registro do banco através do repositório [1]
   return await favoriteRepo.remove(favorito.id);
 };
 
