@@ -7,9 +7,11 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/* =======================
-   ENUMS
-======================= */
+/**
+ * =======================
+ * ENUMS
+ * =======================
+ */
 enum PapelUsuario {
   USUARIO
   ADMIN
@@ -32,216 +34,253 @@ enum StatusPagamento {
 
 enum TipoTamanho {
   NUMERICO // tênis: 39, 40, 41...
-  LETRA    // roupas: P, M, G, GG
+  LETRA // roupas: P, M, G, GG
 }
 
-/* =======================
-   USUÁRIO
-======================= */
+/**
+ * =======================
+ * USUÁRIO
+ * =======================
+ */
 model Usuario {
-  id            String   @id @default(uuid())
-  nome          String
-  email         String   @unique
-  senha         String
-  papel         PapelUsuario @default(USUARIO)
+  id    String       @id @default(uuid())
+  nome  String
+  email String       @unique
+  senha String
+  papel PapelUsuario @default(USUARIO)
 
-  carrinho      Carrinho?
-  pedidos       Pedido[]
-  enderecos     Endereco[]
-  favoritos     Produto[]
-  feedbacks     Feedback[]
-
-  criadoEm      DateTime @default(now())
-  atualizadoEm  DateTime @updatedAt
-}
-
-/* Nota: a tabela de favoritos é um relacionamento many-to-many entre Usuario e Produto.
-  Usamos aqui um relacionamento implícito (Prisma cria a tabela de junção automaticamente).
-*/
-
-/* =======================
-   ENDEREÇO
-======================= */
-model Endereco {
-  id           String   @id @default(uuid())
-  usuarioId    String
-  usuario      Usuario @relation(fields: [usuarioId], references: [id])
-
-  rua          String
-  numero       String
-  complemento  String?
-  bairro       String
-  cidade       String
-  estado       String
-  cep          String
+  carrinho  Carrinho?
+  pedidos   Pedido[]
+  enderecos Endereco[]
+  favoritos Favorito[]
+  feedbacks Feedback[]
 
   criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
 }
 
-/* =======================
-   CATEGORIA
-======================= */
-model Categoria {
+/**
+ * Nota: a tabela de favoritos é um relacionamento many-to-many entre Usuario e Produto.
+ * Usamos aqui um relacionamento implícito (Prisma cria a tabela de junção automaticamente).
+ */
+
+model Favorito {
   id        String   @id @default(uuid())
-  nome      String
-  slug      String   @unique
-
-  produtos  Produto[]
-
+  usuarioId String
+  produtoId String
   criadoEm  DateTime @default(now())
+
+  // Relacionamentos
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  produto Produto @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+
+  // Garante que o usuário não favorite o mesmo produto mais de uma vez [1]
+  @@unique([usuarioId, produtoId])
 }
 
-/* =======================
-   PRODUTO
-======================= */
+/**
+ * =======================
+ * ENDEREÇO
+ * =======================
+ */
+model Endereco {
+  id        String  @id @default(uuid())
+  usuarioId String
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
+
+  rua         String
+  numero      String
+  complemento String?
+  bairro      String
+  cidade      String
+  estado      String
+  cep         String
+
+  criadoEm DateTime @default(now())
+}
+
+/**
+ * =======================
+ * CATEGORIA
+ * =======================
+ */
+model Categoria {
+  id   String @id @default(uuid())
+  nome String
+  slug String @unique
+
+  produtos Produto[]
+
+  criadoEm DateTime @default(now())
+}
+
+/**
+ * =======================
+ * PRODUTO
+ * =======================
+ */
 model Produto {
-  id              String   @id @default(uuid())
-  nome            String
-  descricao       String
+  id        String @id @default(uuid())
+  nome      String
+  descricao String
 
-  preco           Decimal  @db.Decimal(10,2) // preço original
-  emPromocao      Boolean  @default(false)
-  precoPromocional Decimal? @db.Decimal(10,2) // só existe se emPromocao = true ==> criar regra no backend
+  preco            Decimal  @db.Decimal(10, 2) // preço original
+  emPromocao       Boolean  @default(false)
+  precoPromocional Decimal? @db.Decimal(10, 2) // só existe se emPromocao = true ==> criar regra no backend
 
-  slug            String   @unique
-  imagemUrl       String
-  estrelas        Float    @default(0) // média de avaliações (0.5, 1.0, 1.5, ..., 5.0, 5.5)
+  slug      String @unique
+  imagemUrl String
+  estrelas  Float  @default(0) // média de avaliações (0.5, 1.0, 1.5, ..., 5.0, 5.5)
 
-  categoriaId     String
-  categoria       Categoria @relation(fields: [categoriaId], references: [id])
+  categoriaId String
+  categoria   Categoria @relation(fields: [categoriaId], references: [id])
 
-  variacoes       ProdutoVariacao[]
-  favoritadoPor   Usuario[]
-  feedbacks       Feedback[]
+  variacoes ProdutoVariacao[]
+  favoritos Favorito[]
+  feedbacks Feedback[]
 
-  criadoEm        DateTime @default(now())
-  atualizadoEm    DateTime @updatedAt
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
 }
 
-/* =======================
-   VARIAÇÃO DO PRODUTO (TAMANHO)
-======================= */
+/**
+ * =======================
+ * VARIAÇÃO DO PRODUTO (TAMANHO)
+ * =======================
+ */
 model ProdutoVariacao {
-  id            String   @id @default(uuid())
-  produtoId     String
-  produto       Produto  @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+  id        String  @id @default(uuid())
+  produtoId String
+  produto   Produto @relation(fields: [produtoId], references: [id], onDelete: Cascade)
 
-  tipoTamanho   TipoTamanho
-  tamanho       String      // "39", "41", "M", "GG"
-  estoque       Int
-  cores         String[]
-  sku           String   @unique
+  tipoTamanho TipoTamanho
+  tamanho     String // "39", "41", "M", "GG"
+  estoque     Int
+  cores       String[]
+  sku         String      @unique
 
   itensCarrinho CarrinhoItem[]
   itensPedido   PedidoItem[]
 
-  criadoEm      DateTime @default(now())
+  criadoEm DateTime @default(now())
 }
 
-/* =======================
-   CARRINHO
-======================= */
+/**
+ * =======================
+ * CARRINHO
+ * =======================
+ */
 model Carrinho {
-  id          String   @id @default(uuid())
-  usuarioId   String   @unique
-  usuario     Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  id        String  @id @default(uuid())
+  usuarioId String  @unique
+  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
-  itens       CarrinhoItem[]
+  itens CarrinhoItem[]
 
-  criadoEm    DateTime @default(now())
+  criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 }
 
-/* =======================
-   ITEM DO CARRINHO
-======================= */
+/**
+ * =======================
+ * ITEM DO CARRINHO
+ * =======================
+ */
 model CarrinhoItem {
-  id                  String   @id @default(uuid())
-  quantidade          Int
+  id         String @id @default(uuid())
+  quantidade Int
 
-  carrinhoId          String
-  carrinho            Carrinho @relation(fields: [carrinhoId], references: [id])
+  carrinhoId String
+  carrinho   Carrinho @relation(fields: [carrinhoId], references: [id])
 
-  produtoVariacaoId   String
-  produtoVariacao     ProdutoVariacao @relation(fields: [produtoVariacaoId], references: [id], onDelete: Cascade)
+  produtoVariacaoId String
+  produtoVariacao   ProdutoVariacao @relation(fields: [produtoVariacaoId], references: [id], onDelete: Cascade)
 
-  criadoEm            DateTime @default(now())
+  criadoEm DateTime @default(now())
 }
 
-/* =======================
-   PEDIDO
-======================= */
+/**
+ * =======================
+ * PEDIDO
+ * =======================
+ */
 model Pedido {
-  id            String        @id @default(uuid())
-  usuarioId     String
-  usuario       Usuario      @relation(fields: [usuarioId], references: [id])
+  id        String  @id @default(uuid())
+  usuarioId String
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
 
-  status        StatusPedido @default(PENDENTE)
-  total         Decimal      @db.Decimal(10,2)
+  status StatusPedido @default(PENDENTE)
+  total  Decimal      @db.Decimal(10, 2)
 
   // Endereço congelado no pedido
-  rua           String
-  numero        String
-  complemento   String?
-  bairro        String
-  cidade        String
-  estado        String
-  cep           String
+  rua         String
+  numero      String
+  complemento String?
+  bairro      String
+  cidade      String
+  estado      String
+  cep         String
 
-  itens         PedidoItem[]
-  pagamento     Pagamento?
+  itens     PedidoItem[]
+  pagamento Pagamento?
 
-  criadoEm      DateTime      @default(now())
-  atualizadoEm  DateTime      @updatedAt
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
 }
 
-/* =======================
-   ITEM DO PEDIDO
-======================= */
+/**
+ * =======================
+ * ITEM DO PEDIDO
+ * =======================
+ */
 model PedidoItem {
-  id                  String   @id @default(uuid())
-  quantidade          Int
-  preco               Decimal  @db.Decimal(10,2)
+  id         String  @id @default(uuid())
+  quantidade Int
+  preco      Decimal @db.Decimal(10, 2)
 
-  pedidoId            String
-  pedido              Pedido  @relation(fields: [pedidoId], references: [id])
+  pedidoId String
+  pedido   Pedido @relation(fields: [pedidoId], references: [id])
 
-  produtoVariacaoId   String
-  produtoVariacao     ProdutoVariacao @relation(fields: [produtoVariacaoId], references: [id], onDelete: Cascade)
+  produtoVariacaoId String
+  produtoVariacao   ProdutoVariacao @relation(fields: [produtoVariacaoId], references: [id], onDelete: Cascade)
 }
 
-/* =======================
-   PAGAMENTO
-======================= */
+/**
+ * =======================
+ * PAGAMENTO
+ * =======================
+ */
 model Pagamento {
-  id            String           @id @default(uuid())
-  pedidoId      String           @unique
-  pedido        Pedido           @relation(fields: [pedidoId], references: [id])
+  id       String @id @default(uuid())
+  pedidoId String @unique
+  pedido   Pedido @relation(fields: [pedidoId], references: [id])
 
-  provedor      String           // mercado_pago
-  pagamentoId   String           // ID do pagamento no Mercado Pago
-  status        StatusPagamento
+  provedor    String // mercado_pago
+  pagamentoId String // ID do pagamento no Mercado Pago
+  status      StatusPagamento
 
-  criadoEm      DateTime         @default(now())
+  criadoEm DateTime @default(now())
 }
 
-/* =======================
-   FEEDBACK / AVALIAÇÃO
-======================= */
+/**
+ * =======================
+ * FEEDBACK / AVALIAÇÃO
+ * =======================
+ */
 model Feedback {
-  id              String   @id @default(uuid())
-  
-  usuarioId       String
-  usuario         Usuario  @relation(fields: [usuarioId], references: [id])
-  
-  produtoId       String
-  produto         Produto  @relation(fields: [produtoId], references: [id])
-  
-  estrelas        Float    // avaliação em estrelas (1.0, 1.5, 2.0, ..., 5.0, 5.5)
-  comentario      String?  // comentário opcional
-  
-  criadoEm        DateTime @default(now())
-  atualizadoEm    DateTime @updatedAt
+  id String @id @default(uuid())
+
+  usuarioId String
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
+
+  produtoId String
+  produto   Produto @relation(fields: [produtoId], references: [id])
+
+  estrelas   Float // avaliação em estrelas (1.0, 1.5, 2.0, ..., 5.0, 5.5)
+  comentario String? // comentário opcional
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
 
   // Garantir que um usuário não pode avaliar o mesmo produto mais de uma vez
   @@unique([usuarioId, produtoId])
