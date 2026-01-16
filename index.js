@@ -11,6 +11,7 @@ import categoryRoutes from './src/routes/category.routes.js'
 import orderRoutes from './src/routes/order.routes.js'
 import webhookRoutes from './src/routes/webhook.routes.js'
 import feedbackRoutes from './src/routes/feedback.routes.js'
+import debugRoutes from './src/routes/debug.routes.js'
 const app = express()
 
 app.use(cors({
@@ -49,6 +50,9 @@ app.use('/api/feedback', feedbackRoutes)
 
 // Webhooks
 app.use('/webhooks', webhookRoutes)
+
+// Debug / util
+app.use('/debug', debugRoutes)
 
 
 const PORT = process.env.PORT || 3000

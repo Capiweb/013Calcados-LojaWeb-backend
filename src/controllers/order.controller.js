@@ -40,16 +40,16 @@ export const checkout = async (req, res) => {
     const endereco = req.body.endereco
     const pedido = await orderService.createOrderFromCart(userId, endereco)
 
-    // buscar pedido com itens
-    const fullPedido = await orderService.getCart(userId) // reuse: alternativamente buscar pedido
+    // buscar pedido com itens recém-criado
+    const fullPedido = await orderService.getOrderById(pedido.id)
 
-    // criar preference MP
-    const pref = await orderService.createMercadoPagoPreference({ itens: pedido.itens })
+    // criar preference MP (inclui external_reference = pedido.id)
+    const pref = await orderService.createMercadoPagoPreference(fullPedido)
 
     // vincular pagamento
     await orderService.linkPaymentToOrder(pedido.id, { provedor: 'mercado_pago', pagamentoId: pref.id, status: 'PENDENTE' })
 
-    return res.status(200).json({ init_point: pref.init_point, preference: pref })
+  return res.status(200).json({ init_point: pref.init_point, preference: pref, pedidoId: pedido.id })
   } catch (error) {
     console.error(error)
     return res.status(500).json({ error: 'Erro ao criar checkout' })
@@ -77,5 +77,27 @@ export const getAllOrders = async (req, res) => {
       payload.stack = error.stack
     }
     return res.status(500).json(payload)
+  }
+}
+
+export const getAllCarts = async (req, res) => {
+  try {
+    const carts = await orderService.listAllCarts()
+    return res.status(200).json(carts)
+  } catch (error) {
+    console.error('getAllCarts error:', error)
+    return res.status(500).json({ error: 'Erro ao obter carrinhos' })
+  }
+}
+
+export const getCartById = async (req, res) => {
+  try {
+    const { id } = req.params
+    const cart = await orderService.getCartById(id)
+    if (!cart) return res.status(404).json({ error: 'Carrinho não encontrado' })
+    return res.status(200).json(cart)
+  } catch (error) {
+    console.error('getCartById error:', error)
+    return res.status(500).json({ error: 'Erro ao obter carrinho' })
   }
 }

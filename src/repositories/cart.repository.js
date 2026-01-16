@@ -42,9 +42,15 @@ export const getCartWithItems = async (usuarioId) => {
                   tamanho: true,
                   estoque: true,
                   sku: true,
-                  criadoEm: true
-                },
-                include: { produto: true }
+                  criadoEm: true,
+                  produto: {
+                    select: {
+                      id: true,
+                      nome: true,
+                      preco: true
+                    }
+                  }
+                }
               }
             }
           }
@@ -77,4 +83,105 @@ export const clearCart = async (usuarioId) => {
   const cart = await prisma.carrinho.findUnique({ where: { usuarioId } })
   if (!cart) return
   await prisma.carrinhoItem.deleteMany({ where: { carrinhoId: cart.id } })
+}
+
+export const findAllCarts = async () => {
+  try {
+    return await prisma.carrinho.findMany({
+      include: {
+        usuario: true,
+        itens: {
+          include: {
+            produtoVariacao: {
+              include: { produto: true }
+            }
+          }
+        }
+      }
+    })
+  } catch (err) {
+    // If the DB doesn't have the new 'cores' column yet, Prisma may throw P2022
+    // referencing ProdutoVariacao.cores. In that case, retry with a safer select
+    // that avoids reading the missing column.
+    if (err?.code === 'P2022' || (err?.message && err.message.includes('ProdutoVariacao.cores'))) {
+      return prisma.carrinho.findMany({
+        include: {
+          usuario: true,
+          itens: {
+            include: {
+              produtoVariacao: {
+                select: {
+                  id: true,
+                  produtoId: true,
+                  tipoTamanho: true,
+                  tamanho: true,
+                  estoque: true,
+                  sku: true,
+                  criadoEm: true,
+                  produto: {
+                    select: {
+                      id: true,
+                      nome: true,
+                      preco: true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      })
+    }
+    throw err
+  }
+}
+
+export const findCartById = async (id) => {
+  try {
+    return await prisma.carrinho.findUnique({
+      where: { id },
+      include: {
+        usuario: true,
+        itens: {
+          include: {
+            produtoVariacao: {
+              include: { produto: true }
+            }
+          }
+        }
+      }
+    })
+  } catch (err) {
+    if (err?.code === 'P2022' || (err?.message && err.message.includes('ProdutoVariacao.cores'))) {
+      return prisma.carrinho.findUnique({
+        where: { id },
+        include: {
+          usuario: true,
+          itens: {
+            include: {
+              produtoVariacao: {
+                select: {
+                  id: true,
+                  produtoId: true,
+                  tipoTamanho: true,
+                  tamanho: true,
+                  estoque: true,
+                  sku: true,
+                  criadoEm: true,
+                  produto: {
+                    select: {
+                      id: true,
+                      nome: true,
+                      preco: true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      })
+    }
+    throw err
+  }
 }
