@@ -224,7 +224,180 @@ O endpoint para receber notificações do Mercado Pago está exposto em:
 
 Configure a URL pública (por exemplo, usando ngrok em desenvolvimento) e ajuste `MP_NOTIFICATION_URL` nas configurações do Mercado Pago para apontar para ela.
 
-### Query params de filtragem (GET /api/products)
+## ⭐ Avaliações de Produtos (Feedback)
+
+Sistema completo de avaliação de produtos com estrelas e comentários.
+
+### Endpoints de Avaliações
+
+- **POST** `/api/feedback` - Criar avaliação (autenticado, apenas usuários que compraram)
+- **GET** `/api/feedback/product/:produtoId` - Listar avaliações de um produto (público)
+- **GET** `/api/feedback/product/:produtoId/stats` - Obter estatísticas de avaliação (público)
+
+### Características do Sistema
+
+✅ **Validação de Compra**: Apenas usuários que compraram o produto podem avaliá-lo (verificação via Pedido → PedidoItem)
+✅ **Avaliações Quebradas**: Suporta valores de 0.5 em 0.5 (ex: 1.0, 1.5, 2.0, ..., 5.0, 5.5)
+✅ **Evita Duplicatas**: Um usuário não pode avaliar o mesmo produto duas vezes
+✅ **Atualização Automática**: A média de avaliações é recalculada e atualizada no produto automaticamente
+✅ **Comentários Opcionais**: Podem acompanhar a avaliação numérica
+✅ **Paginação**: Lista de feedbacks com suporte a paginação
+✅ **Estatísticas**: Distribuição de avaliações por número de estrelas
+
+### Criar Avaliação
+
+**Endpoint:**
+```
+POST /api/feedback
+Authorization: Bearer {token_jwt}
+Content-Type: application/json
+```
+
+**Body:**
+```json
+{
+  "produtoId": "uuid-do-produto",
+  "estrelas": 4.5,
+  "comentario": "Produto excelente! Recomendo muito."
+}
+```
+
+**Respostas:**
+
+- `201 Created` - Avaliação criada com sucesso
+- `400 Bad Request` - Dados inválidos (estrelas fora do range, incremento errado, comentário muito longo)
+- `401 Unauthorized` - Usuário não autenticado
+- `403 Forbidden` - Usuário não comprou o produto
+- `404 Not Found` - Produto não encontrado
+- `409 Conflict` - Usuário já avaliou este produto
+
+### Listar Avaliações
+
+**Endpoint:**
+```
+GET /api/feedback/product/{produtoId}?page=1&limit=10
+```
+
+**Respostas:**
+
+```json
+{
+  "feedbacks": [
+    {
+      "id": "uuid",
+      "usuarioId": "uuid",
+      "produtoId": "uuid",
+      "estrelas": 4.5,
+      "comentario": "Excelente produto!",
+      "criadoEm": "2026-01-14T10:30:00Z",
+      "atualizadoEm": "2026-01-14T10:30:00Z",
+      "usuario": {
+        "id": "uuid",
+        "nome": "João Silva"
+      }
+    }
+  ],
+  "pagination": {
+    "total": 25,
+    "page": 1,
+    "limit": 10,
+    "pages": 3
+  }
+}
+```
+
+### Obter Estatísticas
+
+**Endpoint:**
+```
+GET /api/feedback/product/{produtoId}/stats
+```
+
+**Resposta:**
+
+```json
+{
+  "media": 4.35,
+  "total": 20,
+  "distribution": {
+    "0.5": 0,
+    "1.0": 0,
+    "1.5": 0,
+    "2.0": 0,
+    "2.5": 1,
+    "3.0": 2,
+    "3.5": 3,
+    "4.0": 5,
+    "4.5": 6,
+    "5.0": 3,
+    "5.5": 0
+  }
+}
+```
+
+### Schema do Banco
+
+O modelo `Feedback` foi adicionado ao schema Prisma com os seguintes campos:
+
+```prisma
+model Feedback {
+  id              String   @id @default(uuid())
+  usuarioId       String
+  usuario         Usuario  @relation(fields: [usuarioId], references: [id])
+  
+  produtoId       String
+  produto         Produto  @relation(fields: [produtoId], references: [id])
+  
+  estrelas        Float    // avaliação em estrelas
+  comentario      String?  // opcional
+  
+  criadoEm        DateTime @default(now())
+  atualizadoEm    DateTime @updatedAt
+
+  @@unique([usuarioId, produtoId])  // Garante unicidade
+}
+```
+
+O modelo `Produto` também foi atualizado com:
+```prisma
+estrelas Float @default(0)  // Média das avaliações
+feedbacks Feedback[]        // Relacionamento
+```
+
+### Validações
+
+**Valores de Estrelas Válidos:**
+- 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5
+
+**Comentário:**
+- Máximo 1000 caracteres
+- Opcional
+
+**Autenticação:**
+- Token JWT obrigatório (Bearer token)
+
+**Verificação de Compra:**
+- Verifica através de: Pedido → PedidoItem → ProdutoVariacao → Produto
+- Apenas pedidos com status `PAGO`, `ENVIADO` ou `ENTREGUE` contam como compra
+
+### Para Testar
+
+1. **Criar um pedido** (via `/api/orders/checkout`)
+2. **Marcar como PAGO** (via Mercado Pago ou diretamente no banco)
+3. **Criar avaliação** (POST `/api/feedback`)
+
+Ou inserir dados de teste direto no banco:
+
+```sql
+INSERT INTO "Pedido" (...) VALUES (...);
+INSERT INTO "PedidoItem" (...) VALUES (...);
+```
+
+### Documentação Swagger
+
+Acesse a documentação interativa em `http://localhost:3000/api-docs` após iniciar o servidor.
+
+A documentação inclui exemplos de requisição e resposta para todos os endpoints de feedback.
 
 A rota de listagem aceita os seguintes parâmetros de query para filtrar e paginar resultados:
 
