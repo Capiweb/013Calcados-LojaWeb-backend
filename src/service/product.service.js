@@ -11,7 +11,9 @@ export const createProductsBulk = async (products) => {
 
   const created = []
   for (const p of products) {
-    const prod = await productRepo.createProduct(p)
+    const payload = { ...p }
+    if (Array.isArray(p.variacoes)) payload.variacoes = { create: p.variacoes }
+    const prod = await productRepo.createProduct(payload)
     created.push(prod)
   }
 

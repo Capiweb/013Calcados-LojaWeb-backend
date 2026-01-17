@@ -4,8 +4,14 @@ const prisma = new PrismaClient()
 
 export const createProduct = async (data) => {
   try {
+    // Normalize variacoes: accept either an array or already nested { create: [...] }
+    const payload = { ...data }
+    if (Array.isArray(data.variacoes)) {
+      payload.variacoes = { create: data.variacoes }
+    }
+
     return await prisma.produto.create({
-      data,
+      data: payload,
       include: {
         categoria: true,
         variacoes: true,
@@ -15,14 +21,33 @@ export const createProduct = async (data) => {
     // If the DB doesn't have the 'cores' column yet, retry without it
     if (err?.code === 'P2022' || (err?.message && err.message.includes('ProdutoVariacao.cores'))) {
       // remove cores from nested variacoes if present
+      // Build safeData: support both array and nested create structures
+      const safeVariacoes = (() => {
+        if (!data.variacoes) return undefined
+        // if variacoes is nested { create: [...] }
+        if (data.variacoes.create && Array.isArray(data.variacoes.create)) {
+          return data.variacoes.create.map(v => ({
+            tipoTamanho: v.tipoTamanho,
+            tamanho: v.tamanho,
+            estoque: v.estoque,
+            sku: v.sku
+          }))
+        }
+        // if variacoes is an array
+        if (Array.isArray(data.variacoes)) {
+          return data.variacoes.map(v => ({
+            tipoTamanho: v.tipoTamanho,
+            tamanho: v.tamanho,
+            estoque: v.estoque,
+            sku: v.sku
+          }))
+        }
+        return undefined
+      })()
+
       const safeData = {
         ...data,
-        variacoes: data.variacoes ? { create: data.variacoes.create.map(v => ({
-          tipoTamanho: v.tipoTamanho,
-          tamanho: v.tamanho,
-          estoque: v.estoque,
-          sku: v.sku
-        })) } : undefined
+        variacoes: safeVariacoes ? { create: safeVariacoes } : undefined
       }
       return prisma.produto.create({
         data: safeData,
