@@ -8,7 +8,7 @@ export const createFavorite = async (req, res, next) => {
     const { produtoId } = req.body; // O ID vem do corpo da requisição
     const usuarioId = req.user.id; // Extraído do token JWT pelo middleware de auth [3, 4]
 
-    const favorito = await favoriteService.createFavorite(usuarioId, produtoId);
+    const favorito = await favoriteService.createFavorite({ usuarioId, produtoId });
 
     return res.status(201).json({
       message: 'Produto adicionado aos favoritos com sucesso',

@@ -300,169 +300,258 @@ curl "http://localhost:3000/api/orders/admin?status=PENDENTE" \
 ### Webhooks
 - POST /webhooks/mercadopago — processa notificações do Mercado Pago. Atualmente há uma implementação básica que deve ser endurecida (verificação de assinatura, idempotência, e mapeamento de status).
 
-## Filtros disponíveis para /api/orders/admin
+## Categorias
 
-A rota `GET /api/orders/admin` aceita vários filtros via query string. Abaixo descrevo cada filtro possível, exemplos de uso e como ele é mapeado internamente para um objeto `where` do Prisma.
+Endpoints de categorias:
 
-- `status` (string) — filtra pelo status do pedido (enum `StatusPedido`). Valores válidos: `PENDENTE`, `PAGO`, `CANCELADO`, `ENVIADO`, `ENTREGUE`.
-  - Exemplo: `?status=PENDENTE`
-  - Prisma where: { status: 'PENDENTE' }
+- **POST** `/api/categories` - Criar categoria (admin)
+- **GET** `/api/categories` - Listar categorias (público)
+- **GET** `/api/categories/:id` - Obter categoria por id (público)
+- **PUT** `/api/categories/:id` - Atualizar categoria (admin)
+- **DELETE** `/api/categories/:id` - Deletar categoria (admin)
 
-- `statusPagamento` (string) — filtra pelo status do pagamento associado (enum `StatusPagamento`). Valores: `PENDENTE`, `APROVADO`, `REJEITADO`, `REEMBOLSADO`.
-  - Exemplo: `?statusPagamento=APROVADO`
-  - Prisma where (relacional): { pagamento: { status: 'APROVADO' } }
+Obs: `slug` deve ser único. Operações de escrita exigem autenticação e papel `ADMIN`.
 
-- `paymentId` (string) — filtra pelo `pagamento.pagamentoId` (ID do provedor, ex.: Mercado Pago).
-  - Exemplo: `?paymentId=1234567890`
-  - Prisma where: { pagamento: { pagamentoId: '1234567890' } }
+Validação de entrada
 
-- `userId` (uuid) — filtra pedidos feitos por um usuário específico.
-  - Exemplo: `?userId=ec978b1e-d3e9-42d9-9633-eab1f78c0dcf`
-  - Prisma where: { usuarioId: '...' }
+As rotas usam Zod para validação de payloads (schemas aplicados via middleware). Erros de validação retornam 400 com a lista de problemas.
 
-- `orderId` (uuid) — filtra por ID do pedido.
-  - Exemplo: `?orderId=...`
-  - Prisma where: { id: '...' }
+## Carrinho e Pedidos
 
-- `produtoVariacaoId` (uuid) — filtra pedidos que contenham ao menos um item com a variação informada.
-  - Exemplo: `?produtoVariacaoId=...`
-  - Prisma where (relacional): { itens: { some: { produtoVariacaoId: '...' } } }
+Endpoints de carrinho/pedido (autenticado):
 
-- `precoMin` / `precoMax` (number) — filtra por `total` do pedido (inclusive).
-  - Exemplo: `?precoMin=100&precoMax=500`
-  - Prisma where: { total: { gte: 100, lte: 500 } }
+- **GET** `/api/orders/cart` - Obter carrinho do usuário autenticado
+- **POST** `/api/orders/cart/items` - Adicionar/atualizar item no carrinho (body: `produtoVariacaoId`, `quantidade`)
+- **DELETE** `/api/orders/cart/items/:id` - Remover item do carrinho
+- **POST** `/api/orders/checkout` - Criar pedido a partir do carrinho e gerar link de checkout Mercado Pago (body: `endereco`)
 
-- `cidade` / `estado` / `cep` — filtra por campos de endereço congelado no pedido.
-  - Exemplo: `?cidade=São Paulo&estado=SP`
-  - Prisma where: { cidade: 'São Paulo', estado: 'SP' }
+Para usar o Mercado Pago é necessário configurar `MP_ACCESS_TOKEN` no `.env`. O fluxo gera uma `preference` via API do Mercado Pago e retorna `init_point` (link de checkout). Após pagamento, você pode configurar `MP_NOTIFICATION_URL` para receber notificações.
 
-- `dateFrom` / `dateTo` (ISO date) — filtra por `criadoEm` entre intervalos.
-  - Exemplo: `?dateFrom=2025-01-01&dateTo=2025-01-31`
-  - Prisma where: { criadoEm: { gte: new Date(dateFrom), lte: new Date(dateTo) } }
+Webhooks (notificações)
 
-- `statuses` (csv) — filtrar por múltiplos status de uma vez.
-  - Exemplo: `?statuses=PENDENTE,PAGO`
-  - Prisma where: { status: { in: ['PENDENTE','PAGO'] } }
+O endpoint para receber notificações do Mercado Pago está exposto em:
 
-- `include` (string) — controla includes opcionais separados por vírgula (ex.: `include=usuario,pagamento,itens`). Por padrão a rota inclui `itens` e `pagamento`.
-  - Nota: incluir `usuario` adiciona dados do usuário ao retorno.
+- `POST /webhooks/mercadopago`
 
-- `page` / `limit` (number) — paginação. Ex.: `?page=2&limit=20`. Internamente se traduz em `skip: (page-1)*limit, take: limit`.
+Configure a URL pública (por exemplo, usando ngrok em desenvolvimento) e ajuste `MP_NOTIFICATION_URL` nas configurações do Mercado Pago para apontar para ela.
 
-- `orderBy` (string) — ordenação, formato `campo:dir` (ex.: `orderBy=criadoEm:desc` ou `orderBy=total:asc`).
+## ⭐ Avaliações de Produtos (Feedback)
 
-Combinações
-- Todos os filtros podem ser combinados — aplicam-se em AND. Exemplos:
-  - Pedidos pendentes de um usuário entre datas: `?userId=...&status=PENDENTE&dateFrom=2025-01-01&dateTo=2025-01-31`
-  - Pedidos que contenham uma variação específica e com pagamento aprovado: `?produtoVariacaoId=...&statusPagamento=APROVADO`
+Sistema completo de avaliação de produtos com estrelas e comentários.
 
-Performance e segurança
-- Filtrar por campos relacionais (`itens.some`, `pagamento`) pode gerar queries mais pesadas; para listas muito grandes utilize paginação (`page`/`limit`).
-- Sempre use a rota com autenticação e `adminMiddleware`. Evite expor filtros sensíveis sem checagem de papel.
+### Endpoints de Avaliações
 
-Exemplos práticos (curl)
-- Pedidos do usuário X entre 1 e 31 de dezembro de 2025, ordenados pelo total descendente:
-```bash
-curl "http://localhost:3000/api/orders/admin?userId=ec978b1e-d3e9-42d9-9633-eab1f78c0dcf&dateFrom=2025-12-01&dateTo=2025-12-31&orderBy=total:desc&page=1&limit=50" \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
+- **POST** `/api/feedback` - Criar avaliação (autenticado, apenas usuários que compraram)
+- **GET** `/api/feedback/product/:produtoId` - Listar avaliações de um produto (público)
+- **GET** `/api/feedback/product/:produtoId/stats` - Obter estatísticas de avaliação (público)
+
+### Características do Sistema
+
+✅ **Validação de Compra**: Apenas usuários que compraram o produto podem avaliá-lo (verificação via Pedido → PedidoItem)
+✅ **Avaliações Quebradas**: Suporta valores de 0.5 em 0.5 (ex: 1.0, 1.5, 2.0, ..., 5.0, 5.5)
+✅ **Evita Duplicatas**: Um usuário não pode avaliar o mesmo produto duas vezes
+✅ **Atualização Automática**: A média de avaliações é recalculada e atualizada no produto automaticamente
+✅ **Comentários Opcionais**: Podem acompanhar a avaliação numérica
+✅ **Paginação**: Lista de feedbacks com suporte a paginação
+✅ **Estatísticas**: Distribuição de avaliações por número de estrelas
+
+### Criar Avaliação
+
+**Endpoint:**
+```
+POST /api/feedback
+Authorization: Bearer {token_jwt}
+Content-Type: application/json
 ```
 
-- Pedidos que contenham a variação `abc-variacao-id` e cujo pagamento foi aprovado:
-```bash
-curl "http://localhost:3000/api/orders/admin?produtoVariacaoId=abc-variacao-id&statusPagamento=APROVADO" \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
+**Body:**
+```json
+{
+  "produtoId": "uuid-do-produto",
+  "estrelas": 4.5,
+  "comentario": "Produto excelente! Recomendo muito."
+}
 ```
 
-Implementação (dica rápida)
-- No controller atual os parâmetros `status` e `userId` já são mapeados para `where`. Para suportar todos os filtros acima, implemente um construtor de `where` que:
-  - converta `dateFrom/dateTo` em objetos Date;
-  - converta `precoMin/precoMax` para Decimal/Number;
-  - parseie `statuses` CSV para `in`;
-  - adicione relacionais (pagamento, itens) quando os filtros correspondentes estiverem presentes;
-  - aplique `skip`/`take` para paginação e `orderBy` quando fornecido.
+**Respostas:**
 
-Se quiser, eu implemento a validação Zod dos query params e a versão completa do construtor de `where` no `order.controller` e `order.service` — quer que eu implemente agora? 
+- `201 Created` - Avaliação criada com sucesso
+- `400 Bad Request` - Dados inválidos (estrelas fora do range, incremento errado, comentário muito longo)
+- `401 Unauthorized` - Usuário não autenticado
+- `403 Forbidden` - Usuário não comprou o produto
+- `404 Not Found` - Produto não encontrado
+- `409 Conflict` - Usuário já avaliou este produto
 
----
+### Listar Avaliações
 
-## Validação e segurança
-
-- Zod é usado para validação de payloads (produtos, categorias, checkout, auth); middleware `validate` aplica os schemas.
-- JWT no header `Authorization: Bearer <token>` ou cookie `token`.
-- Middleware `adminMiddleware` para proteger rotas de escrita (criar/editar/deletar produtos e categorias).
-- Senhas: bcrypt com hash seguro.
-
----
-
-## Swagger (Documentação)
-- Documentação disponível em `/api-docs` quando o servidor está rodando.
-- O Swagger foi atualizado para incluir `variacoes[].cores` nos schemas de produto.
-
----
-
-## Deploy na Render (comandos recomendados)
-
-Seu ambiente mostrou incompatibilidade de versões do Prisma (Render usa CLI Prisma 7.x por padrão). Para evitar erros, o `package.json` contém scripts que invocam `npx prisma@6.16.2 ...`.
-
-Recomendações no painel da Render (Service settings):
-- Build Command: `npm run build`  (gera Prisma Client: `npx prisma@6.16.2 generate`)
-- Pre-Deploy Command: `npx prisma@6.16.2 migrate deploy`  (aplica migrations já geradas — **recomendado**)
-- Start Command: `npm start`  (ou `npm run render-start` que aplica migrations e inicia)
-
-Observação: confirme que `DATABASE_URL`, `JWT_SECRET`, `MP_ACCESS_TOKEN` e `NODE_ENV=production` estejam configuradas no ambiente da Render.
-
----
-
-## Rotina de migrações (seguro)
-
-Fluxo recomendado:
-1. No dev local, com `DATABASE_URL` apontando pro DB dev:
-```bash
-npx prisma@6.16.2 migrate dev --name add-cores-variacao
-npx prisma@6.16.2 generate
+**Endpoint:**
 ```
-2. Teste localmente a API.
-3. Commit a pasta `prisma/migrations` no repositório.
-4. No ambiente de produção (Render), rode: `npx prisma@6.16.2 migrate deploy` (ou configure como Pre-Deploy Command)
+GET /api/feedback/product/{produtoId}?page=1&limit=10
+```
 
-Se precisar de um push rápido (dev only): `npx prisma@6.16.2 db push`.
+**Respostas:**
 
----
+```json
+{
+  "feedbacks": [
+    {
+      "id": "uuid",
+      "usuarioId": "uuid",
+      "produtoId": "uuid",
+      "estrelas": 4.5,
+      "comentario": "Excelente produto!",
+      "criadoEm": "2026-01-14T10:30:00Z",
+      "atualizadoEm": "2026-01-14T10:30:00Z",
+      "usuario": {
+        "id": "uuid",
+        "nome": "João Silva"
+      }
+    }
+  ],
+  "pagination": {
+    "total": 25,
+    "page": 1,
+    "limit": 10,
+    "pages": 3
+  }
+}
+```
 
-## Como zerar/importar produtos em massa
+### Obter Estatísticas
 
-- Para importar em massa, use o endpoint `/api/products/bulk` enviando um array de produtos (cada produto com `variacoes`). Exemplo de payload de 3 produtos foi enviado no repositório e no histórico de conversas.
+**Endpoint:**
+```
+GET /api/feedback/product/{produtoId}/stats
+```
 
-- Para zerar a tabela de produtos (limpar tudo) com segurança:
-  - Faça backup do DB.
-  - Execute SQL (psql/pgAdmin):
+**Resposta:**
+
+```json
+{
+  "media": 4.35,
+  "total": 20,
+  "distribution": {
+    "0.5": 0,
+    "1.0": 0,
+    "1.5": 0,
+    "2.0": 0,
+    "2.5": 1,
+    "3.0": 2,
+    "3.5": 3,
+    "4.0": 5,
+    "4.5": 6,
+    "5.0": 3,
+    "5.5": 0
+  }
+}
+```
+
+### Schema do Banco
+
+O modelo `Feedback` foi adicionado ao schema Prisma com os seguintes campos:
+
+```prisma
+model Feedback {
+  id              String   @id @default(uuid())
+  usuarioId       String
+  usuario         Usuario  @relation(fields: [usuarioId], references: [id])
+  
+  produtoId       String
+  produto         Produto  @relation(fields: [produtoId], references: [id])
+  
+  estrelas        Float    // avaliação em estrelas
+  comentario      String?  // opcional
+  
+  criadoEm        DateTime @default(now())
+  atualizadoEm    DateTime @updatedAt
+
+  @@unique([usuarioId, produtoId])  // Garante unicidade
+}
+```
+
+O modelo `Produto` também foi atualizado com:
+```prisma
+estrelas Float @default(0)  // Média das avaliações
+feedbacks Feedback[]        // Relacionamento
+```
+
+### Validações
+
+**Valores de Estrelas Válidos:**
+- 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5
+
+**Comentário:**
+- Máximo 1000 caracteres
+- Opcional
+
+**Autenticação:**
+- Token JWT obrigatório (Bearer token)
+
+**Verificação de Compra:**
+- Verifica através de: Pedido → PedidoItem → ProdutoVariacao → Produto
+- Apenas pedidos com status `PAGO`, `ENVIADO` ou `ENTREGUE` contam como compra
+
+### Para Testar
+
+1. **Criar um pedido** (via `/api/orders/checkout`)
+2. **Marcar como PAGO** (via Mercado Pago ou diretamente no banco)
+3. **Criar avaliação** (POST `/api/feedback`)
+
+Ou inserir dados de teste direto no banco:
+
 ```sql
-BEGIN;
-TRUNCATE TABLE "Produto" CASCADE;
-COMMIT;
+INSERT INTO "Pedido" (...) VALUES (...);
+INSERT INTO "PedidoItem" (...) VALUES (...);
 ```
-  - Ou via Prisma (cuidado): `await prisma.produto.deleteMany()` (em ambiente controlado).
+
+### Documentação Swagger
+
+Acesse a documentação interativa em `http://localhost:3000/api-docs` após iniciar o servidor.
+
+A documentação inclui exemplos de requisição e resposta para todos os endpoints de feedback.
+
+A rota de listagem aceita os seguintes parâmetros de query para filtrar e paginar resultados:
+
+- `page` (number) — página (padrão: 1)
+- `limit` (number) — número de itens por página (padrão: 10)
+- `categoria` (string) — slug da categoria (ex: `calcados`)
+- `emPromocao` (true|false) — filtra produtos com `emPromocao = true` ou `false`
+- `precoMin` (number) — preço mínimo (inclusive)
+- `precoMax` (number) — preço máximo (inclusive)
+- `q` (string) — busca por nome (contains, case-insensitive)
+- `tamanho` (string) — filtra produtos que possuem variação com esse tamanho (ex: `40`)
+- `emEstoque` (boolean) — quando presente filtra produtos que têm alguma variação com `estoque > 0`
+
+Exemplos de uso:
+
+- Paginação: `/api/products?page=1&limit=10`
+- Filtrar por categoria: `/api/products?categoria=calcados`
+- Somente produtos em promoção: `/api/products?emPromocao=true`
+- Filtrar por faixa de preço: `/api/products?precoMin=200&precoMax=500`
+- Buscar por nome: `/api/products?q=runner`
+- Filtrar por tamanho: `/api/products?tamanho=40`
+- Filtrar produtos com estoque: `/api/products?emEstoque=true`
+- Combinação (filtro múltiplo): `/api/products?page=2&limit=12&categoria=calcados&precoMin=200&precoMax=500`
+Obs: todos os filtros podem ser combinados. A busca por `tamanho` e `emEstoque` utiliza o relacionamento `variacoes` para verificar presença de tamanhos/estoque.
+
+
+### Características
+
+- ✅ Criptografia de senhas com bcrypt
+- ✅ Validação de dados de entrada
+- ✅ Geração de token JWT com expiração configurável
+- ✅ Respostas enxutas (sem dados sensíveis)
+- ✅ Códigos de status HTTP adequados (400, 401, 409)
+
+Para mais detalhes, consulte [AUTH_API.md](./AUTH_API.md)
+
+## 📖 Documentação Completa
+
+Para detalhes sobre funcionalidades, roadmap e arquitetura do projeto:
+
+- **Tarefas**: [Freedcamp](https://freedcamp.com/view/3693377/tasks/panel/task/68743767)
+- **Fluxograma**: Excalidraw anexado no Freedcamp
 
 ---
 
-## Dicas de manutenção e próximos passos
-
-- Harden webhook: verificação de assinatura, idempotência, evitar dupla decrementação de estoque.
-- Atualizar schema e migrar para Prisma 7 quando tiver tempo para adequar `prisma.config.ts` e `datasource` (benefícios: novos recursos e suporte atualizado).
-- Implementar testes de integração para endpoints críticos (auth, checkout, webhook).
-- Melhorar atualização de variações no `PUT /api/products/:id` — estratégia recomendada: diffs por `sku` ou operação de sincronização em transação (apagar/recriar com cautela).
-
----
-
-## Contatos e referência
-- Repositório: https://github.com/Capiweb/013Calcados-LojaWeb-backend
-- Autor: equipe Capiweb
-
----
-
-Se quiser, posso:
-- Gerar as migrations localmente (se você autorizar execução de comandos aqui e tiver DATABASE_URL configurado),
-- Implementar a sincronização completa de variações no update de produto,
-- Adicionar checks/assinaturas no webhook e idempotência.
-
-Fim da documentação detalhada.
+**Template Base v1.0** | Janeiro 2026
