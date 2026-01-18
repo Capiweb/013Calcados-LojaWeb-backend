@@ -13,6 +13,7 @@ import webhookRoutes from './src/routes/webhook.routes.js'
 import feedbackRoutes from './src/routes/feedback.routes.js'
 import debugRoutes from './src/routes/debug.routes.js'
 import favoriteRoutes from './src/routes/favorite.routes.js'
+import enderecoRoutes from './src/routes/endereco.routes.js'
 const app = express()
 
 app.use(cors({
@@ -51,6 +52,9 @@ app.use('/api/orders', orderRoutes)
 
 // Rotas de avaliações
 app.use('/api/feedback', feedbackRoutes)
+
+// Rotas de endereços
+app.use('/api/enderecos', enderecoRoutes)
 
 // Webhooks
 app.use('/webhooks', webhookRoutes)
