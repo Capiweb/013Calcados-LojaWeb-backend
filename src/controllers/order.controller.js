@@ -1,4 +1,6 @@
 import * as orderService from '../service/order.service.js'
+import * as enderecoService from '../service/endereco.service.js'
+import * as userService from '../service/user.js'
 import fetch from 'node-fetch'
 
 export const getCart = async (req, res) => {
@@ -38,31 +40,97 @@ export const removeItem = async (req, res) => {
 export const checkout = async (req, res) => {
   try {
     const userId = req.userId
-
     // Get cart items for the authenticated user
     const cart = await orderService.getCart(userId)
     if (!cart || !cart.itens || cart.itens.length === 0) {
       return res.status(400).json({ error: 'Carrinho vazio' })
     }
 
-    // build items for Mercado Pago preference
-    const items = (cart.itens || []).map((it) => ({
-      title: it.produtoVariacao?.produto?.nome || `Produto ${it.produtoVariacaoId}`,
-      quantity: Number(it.quantidade) || 1,
-      unit_price: Number(it.preco ?? it.produtoVariacao?.produto?.preco ?? 0),
-      currency_id: 'BRL'
-    }))
+    // build items for Mercado Pago preference using richer data from cart/product
+    const items = (cart.itens || []).map((it) => {
+      const pv = it.produtoVariacao || {}
+      const p = pv.produto || {}
+      return {
+        id: pv.sku || pv.id || undefined,
+        title: p.nome || `Produto ${it.produtoVariacaoId}`,
+        description: p.descricao || '',
+        picture_url: p.imagemUrl || undefined,
+        category_id: p.categoriaId || undefined,
+        quantity: Number(it.quantidade) || 1,
+        unit_price: Number(it.preco ?? p.preco ?? 0),
+        currency_id: 'BRL'
+      }
+    })
 
     const MP_ACCESS_TOKEN = process.env.MP_ACCESS_TOKEN
     if (!MP_ACCESS_TOKEN) return res.status(500).json({ error: 'MP_ACCESS_TOKEN não configurado no servidor' })
 
+    // If no endereco provided in request, try to get user's most recent address
+    let endereco = req.body?.endereco
+    if (!endereco) {
+      try {
+        const enderecos = await enderecoService.listEnderecosDoUsuario(userId)
+        // pick the most recent endereco if any
+        if (enderecos && enderecos.length) endereco = enderecos[0]
+      } catch (e) {
+        // ignore: we'll fail later if endereco is required
+      }
+    }
+
+    // Create pedido in DB from cart (freeze address) before creating preference
+    let pedido
+    try {
+      pedido = await orderService.createOrderFromCart(userId, endereco || {})
+    } catch (e) {
+      console.error('Erro ao criar pedido:', e)
+      return res.status(500).json({ error: 'Erro ao criar pedido' })
+    }
+
+    // create pagamento record with status PENDENTE linked to pedido
+    let placeholderPagamentoId
+    try {
+      placeholderPagamentoId = `PENDENTE-${Date.now()}-${pedido.id}`
+      await orderService.linkPaymentToOrder(pedido.id, { provedor: 'mercado_pago', pagamentoId: placeholderPagamentoId, status: 'PENDENTE' })
+    } catch (e) {
+      // ignore payment link error (non-fatal) but log
+      console.error('Erro ao criar registro de pagamento PENDENTE:', e)
+    }
+
     const mpBody = {
       items,
-      external_reference: cart.id || undefined,
+      external_reference: pedido.id || cart.id || undefined,
       back_urls: {
         success: process.env.MP_BACK_URL_SUCCESS || 'https://seusite.com/success',
         failure: process.env.MP_BACK_URL_FAILURE || 'https://seusite.com/failure',
         pending: process.env.MP_BACK_URL_PENDING || 'https://seusite.com/pending'
+      }
+    }
+
+    // Attach payer info from user profile when available
+    try {
+      const user = await userService.getUserById(userId)
+      if (user) {
+        mpBody.payer = mpBody.payer || {}
+        if (user.email) mpBody.payer.email = user.email
+        if (user.nome) {
+          const parts = user.nome.split(' ')
+          mpBody.payer.name = parts.shift() || user.nome
+          mpBody.payer.surname = parts.join(' ') || ''
+        }
+      }
+    } catch (e) {
+      // ignore silently if user fetch fails
+    }
+
+    // Attach shipment/receiver_address from endereco if available
+    if (endereco) {
+      mpBody.shipments = mpBody.shipments || {}
+      mpBody.shipments.receiver_address = {
+        zip_code: endereco.cep || '',
+        street_name: endereco.rua || '',
+        street_number: endereco.numero || null,
+        floor: endereco.andar || '',
+        apartment: endereco.complemento || ''
       }
     }
 
@@ -71,7 +139,7 @@ export const checkout = async (req, res) => {
     mpBody.notification_url = process.env.MP_NOTIFICATION_URL || process.env.MP_WEBHOOK_URL || undefined
     mpBody.auto_return = process.env.MP_AUTO_RETURN || 'approved'
 
-    const mpRes = await fetch('https://api.mercadopago.com/v1/checkout/preferences', {
+    const mpRes = await fetch('https://api.mercadopago.com/checkout/preferences', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${MP_ACCESS_TOKEN}`,

@@ -11,5 +11,5 @@ export const EnderecoSchema = z.object({
 })
 
 export const CheckoutSchema = z.object({
-  endereco: EnderecoSchema
+  endereco: EnderecoSchema.optional()
 })
