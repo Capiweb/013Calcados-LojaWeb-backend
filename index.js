@@ -17,11 +17,25 @@ import enderecoRoutes from './src/routes/endereco.routes.js'
 import * as orderService from './src/service/order.service.js'
 const app = express()
 
+// CORS configuration
+// Allow configuring a comma-separated list of allowed origins via CORS_ORIGINS
+// Example for local dev: CORS_ORIGINS="http://127.0.0.1:5500,http://localhost:5500"
+const rawOrigins = process.env.CORS_ORIGINS || ''
+const allowedOrigins = rawOrigins.split(',').map(s => s.trim()).filter(Boolean)
+// sensible defaults when none provided (includes common Live Server origin)
+if (allowedOrigins.length === 0) {
+  allowedOrigins.push('http://127.0.0.1:5500', 'http://localhost:5500', 'http://localhost:3000')
+}
+
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production'
-    ? process.env.CORS_ORIGIN_PROD
-    : '*',
-  credentials: true
+  origin: (origin, callback) => {
+    // allow non-browser requests like curl/postman (no origin)
+    if (!origin) return callback(null, true)
+    if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) return callback(null, true)
+    console.warn('Blocked CORS origin:', origin)
+    return callback(new Error('Not allowed by CORS'), false)
+  },
+  credentials: true,
 }))
 app.use(express.json())
 app.use(cookieParser())
