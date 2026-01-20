@@ -1,5 +1,5 @@
 -- AlterTable
-ALTER TABLE "Produto" ADD COLUMN     "estrelas" DOUBLE PRECISION NOT NULL DEFAULT 0;
+-- ALTER TABLE "Produto" ADD COLUMN     "estrelas" DOUBLE PRECISION NOT NULL DEFAULT 0;
 
 -- CreateTable
 CREATE TABLE "Feedback" (
@@ -15,12 +15,12 @@ CREATE TABLE "Feedback" (
 );
 
 -- CreateTable
-CREATE TABLE "_ProdutoToUsuario" (
-    "A" TEXT NOT NULL,
-    "B" TEXT NOT NULL,
-
-    CONSTRAINT "_ProdutoToUsuario_AB_pkey" PRIMARY KEY ("A","B")
-);
+-- CREATE TABLE "_ProdutoToUsuario" (
+--     "A" TEXT NOT NULL,
+--     "B" TEXT NOT NULL,
+-- 
+--     CONSTRAINT "_ProdutoToUsuario_AB_pkey" PRIMARY KEY ("A","B")
+-- );
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Feedback_usuarioId_produtoId_key" ON "Feedback"("usuarioId", "produtoId");

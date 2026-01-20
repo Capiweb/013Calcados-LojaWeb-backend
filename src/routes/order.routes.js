@@ -9,6 +9,23 @@ const router = express.Router()
 
 /**
  * @swagger
+ * /api/orders:
+ *   get:
+ *     summary: Listar pedidos do usuário autenticado
+ *     tags:
+ *       - Pedidos
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Lista de pedidos do usuário
+ *       401:
+ *         description: Unauthorized
+ */
+router.get('/', authMiddleware, orderController.getMyOrders)
+
+/**
+ * @swagger
  * /api/orders/cart:
  *   get:
  *     summary: Get user cart

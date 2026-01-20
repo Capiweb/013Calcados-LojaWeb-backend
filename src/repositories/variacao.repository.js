@@ -1,6 +1,4 @@
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
+import prisma from '../utils/prisma.js'
 
 export const getAllVariacoes = async () => {
   return await prisma.produtoVariacao.findMany({

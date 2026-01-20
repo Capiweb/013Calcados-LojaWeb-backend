@@ -1,6 +1,9 @@
 import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
+
+console.log('[favorite.repository] Prisma instance created:', !!prisma)
+
 /*Cria o vínculo de favorito entre um usuário e um produto. */
 export const create = async (usuarioId, produtoId) => {
   return await prisma.favorito.create({
@@ -13,6 +16,7 @@ export const create = async (usuarioId, produtoId) => {
 
 /*Busca uma relação específica para evitar duplicidade, utiliza a chave composta definida no schema*/
 export const findSpecific = async (usuarioId, produtoId) => {
+  console.log('[findSpecific] prisma:', !!prisma, 'usuarioId:', usuarioId, 'produtoId:', produtoId)
   return await prisma.favorito.findUnique({
     where: {
       usuarioId_produtoId: {

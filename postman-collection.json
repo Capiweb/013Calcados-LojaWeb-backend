@@ -1,0 +1,256 @@
+{
+  "info": {
+    "name": "Calcados API - Guia Completo",
+    "description": "Guia passo a passo: Login → Criar Produto → Favoritar",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "🔐 PASSO 1: Registrar Usuário",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nome\": \"Admin User\",\n  \"email\": \"admin@example.com\",\n  \"senha\": \"senha123\",\n  \"confirmarSenha\": \"senha123\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/auth/register",
+          "host": ["{{base_url}}"],
+          "path": ["api", "auth", "register"]
+        }
+      }
+    },
+    {
+      "name": "🔑 PASSO 2: Fazer Login",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "  var jsonData = pm.response.json();",
+              "  pm.environment.set('token', jsonData.token);",
+              "  pm.environment.set('userId', jsonData.user.id);",
+              "  console.log('✅ Token salvo:', jsonData.token.substring(0, 20) + '...');",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"admin@example.com\",\n  \"senha\": \"senha123\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/auth/login",
+          "host": ["{{base_url}}"],
+          "path": ["api", "auth", "login"]
+        }
+      }
+    },
+    {
+      "name": "📦 PASSO 3: Listar Categorias (para pegar ID)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "  var jsonData = pm.response.json();",
+              "  if (jsonData.data && jsonData.data.length > 0) {",
+              "    pm.environment.set('categoryId', jsonData.data[0].id);",
+              "    console.log('✅ Categoria ID salva:', jsonData.data[0].id);",
+              "  }",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/categories",
+          "host": ["{{base_url}}"],
+          "path": ["api", "categories"]
+        }
+      }
+    },
+    {
+      "name": "🏗️ PASSO 4: Criar Categoria (se não houver)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nome\": \"Tênis\",\n  \"slug\": \"tenis\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/categories",
+          "host": ["{{base_url}}"],
+          "path": ["api", "categories"]
+        }
+      }
+    },
+    {
+      "name": "👟 PASSO 5: Criar Produto",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 201) {",
+              "  var jsonData = pm.response.json();",
+              "  pm.environment.set('produtoId', jsonData.id);",
+              "  console.log('✅ Produto criado com ID:', jsonData.id);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nome\": \"Tênis Nike Air Max 90\",\n  \"descricao\": \"Tênis esportivo confortável com design clássico\",\n  \"preco\": \"599.90\",\n  \"slug\": \"tenis-nike-air-max-90\",\n  \"imagemUrl\": \"https://via.placeholder.com/300\",\n  \"categoriaId\": \"{{categoryId}}\",\n  \"variacoes\": [\n    {\n      \"tipoTamanho\": \"NUMERICO\",\n      \"tamanho\": \"39\",\n      \"estoque\": 10,\n      \"cores\": [\"Branco\", \"Preto\"],\n      \"sku\": \"NIKE-AIR-MAX-90-39-001\"\n    },\n    {\n      \"tipoTamanho\": \"NUMERICO\",\n      \"tamanho\": \"40\",\n      \"estoque\": 15,\n      \"cores\": [\"Branco\", \"Cinza\"],\n      \"sku\": \"NIKE-AIR-MAX-90-40-001\"\n    },\n    {\n      \"tipoTamanho\": \"NUMERICO\",\n      \"tamanho\": \"41\",\n      \"estoque\": 8,\n      \"cores\": [\"Preto\"],\n      \"sku\": \"NIKE-AIR-MAX-90-41-001\"\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/products",
+          "host": ["{{base_url}}"],
+          "path": ["api", "products"]
+        }
+      }
+    },
+    {
+      "name": "📋 PASSO 6: Listar Produtos",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/products",
+          "host": ["{{base_url}}"],
+          "path": ["api", "products"]
+        }
+      }
+    },
+    {
+      "name": "⭐ PASSO 7: Favoritar Produto",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"produtoId\": \"{{produtoId}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/favorites",
+          "host": ["{{base_url}}"],
+          "path": ["api", "favorites"]
+        }
+      }
+    },
+    {
+      "name": "💖 PASSO 8: Listar Meus Favoritos",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/favorites",
+          "host": ["{{base_url}}"],
+          "path": ["api", "favorites"]
+        }
+      }
+    },
+    {
+      "name": "🗑️ PASSO 9: Remover do Favoritos",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/favorites/{{produtoId}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "favorites", "{{produtoId}}"]
+        }
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "categoryId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "produtoId",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

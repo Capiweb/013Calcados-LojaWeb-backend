@@ -223,3 +223,11 @@ export const listAllCarts = async () => {
 export const getCartById = async (id) => {
   return cartRepo.findCartById(id)
 }
+
+export const getMyOrders = async (userId) => {
+  // Retorna todos os pedidos do usuário autenticado, ordenados por data decrescente
+  return orderRepo.findAllOrders({
+    where: { usuarioId: userId },
+    orderBy: { criadoEm: 'desc' }
+  })
+}

@@ -1,6 +1,4 @@
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
+import prisma from '../utils/prisma.js'
 
 export const createEndereco = async (data) => {
   return prisma.endereco.create({ data })
