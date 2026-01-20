@@ -14,6 +14,7 @@ import feedbackRoutes from './src/routes/feedback.routes.js'
 import debugRoutes from './src/routes/debug.routes.js'
 import favoriteRoutes from './src/routes/favorite.routes.js'
 import enderecoRoutes from './src/routes/endereco.routes.js'
+import * as orderService from './src/service/order.service.js'
 const app = express()
 
 app.use(cors({
@@ -67,3 +68,14 @@ const PORT = process.env.PORT || 3000
 app.listen(PORT, () => {
   console.log(`🚀 Rodando em http://localhost:${PORT}`)
 })
+
+// Scheduled cleanup: remove PENDENTE payments older than 24 hours
+const CLEANUP_INTERVAL_MS = 1000 * 60 * 60 // every hour
+setInterval(async () => {
+  try {
+    const res = await orderService.deletePendingPaymentsOlderThan(24)
+    if (res && res.count) console.log(`Cleanup: removed ${res.count} pending pagamentos older than 24h`)
+  } catch (e) {
+    console.error('Cleanup job error:', e)
+  }
+}, CLEANUP_INTERVAL_MS)

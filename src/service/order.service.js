@@ -64,7 +64,9 @@ export const createOrderFromCart = async (userId, endereco) => {
     })
   }
 
-  return pedido
+  // return pedido with itens included for downstream use
+  const fullPedido = await orderRepo.getOrderById(pedido.id)
+  return fullPedido
 }
 
 
@@ -89,7 +91,7 @@ export const createMercadoPagoPreference = async (pedido) => {
     notification_url: process.env.MP_NOTIFICATION_URL || undefined
   }
 
-  const url = `${MP_BASE}/v1/checkout/preferences`
+  const url = `${MP_BASE}/checkout/preferences`
   // Debug logs (temporarily) - do not commit secrets to public logs
   try {
     console.log('MP request url:', url)
@@ -102,7 +104,7 @@ export const createMercadoPagoPreference = async (pedido) => {
   // quick token check to surface clearer error if token is invalid
   if (MP_ACCESS_TOKEN) {
     try {
-      const check = await fetch(`${MP_BASE}/v1/users/me`, { headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` } })
+  const check = await fetch(`${MP_BASE}/users/me`, { headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` } })
       if (!check.ok) {
         const txt = await check.text()
         // Provide a friendly, actionable hint when MP returns 404 for token check
@@ -148,7 +150,7 @@ export const handleMpNotification = async (body) => {
   if (!paymentId) throw new Error('payment id not provided')
 
   // consultar MP para obter status
-  const res = await fetch(`${MP_BASE}/v1/payments/${paymentId}`, {
+  const res = await fetch(`${MP_BASE}/payments/${paymentId}`, {
     headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` }
   })
   if (!res.ok) throw new Error('MP consulta failed')
@@ -224,10 +226,7 @@ export const getCartById = async (id) => {
   return cartRepo.findCartById(id)
 }
 
-export const getMyOrders = async (userId) => {
-  // Retorna todos os pedidos do usuário autenticado, ordenados por data decrescente
-  return orderRepo.findAllOrders({
-    where: { usuarioId: userId },
-    orderBy: { criadoEm: 'desc' }
-  })
+export const deletePendingPaymentsOlderThan = async (hours = 24) => {
+  const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000)
+  return orderRepo.deletePendingPaymentsOlderThan(cutoff.toISOString())
 }

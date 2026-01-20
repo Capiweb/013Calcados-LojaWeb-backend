@@ -54,3 +54,8 @@ export const findAllOrders = async ({ where = {}, orderBy = { criadoEm: 'desc' }
     throw err
   }
 }
+
+export const deletePendingPaymentsOlderThan = async (cutoffDate) => {
+  // cutoffDate should be a JS Date or ISO string
+  return prisma.pagamento.deleteMany({ where: { status: 'PENDENTE', criadoEm: { lt: cutoffDate } } })
+}
