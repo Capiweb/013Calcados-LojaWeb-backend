@@ -30,9 +30,12 @@ export const uploadSingle = (fieldName = 'image') => (req, res, next) => {
 				return next()
 			})
 		})
-		.catch((err) => {
-			console.error('upload middleware failed to load multer:', err)
-			// Respond with a clear actionable message for the deploy environment
-			res.status(500).json({ error: 'Server misconfigured: multer is required for file uploads. Run `npm install multer`.' })
-		})
+			.catch((err) => {
+				// If multer can't be loaded, log a warning and continue without failing.
+				// The controller supports imagemBase64 and imagemUrl, so a no-op here
+				// allows the request to proceed when the deploy environment doesn't
+				// have multer installed.
+				console.warn('multer not available, skipping multipart handling:', err?.message || err)
+				return next()
+			})
 }
