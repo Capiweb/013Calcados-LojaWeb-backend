@@ -63,7 +63,10 @@ const router = express.Router()
  *               $ref: '#/components/schemas/ProductListResponse'
  *
  */
-router.post('/', authMiddleware, adminMiddleware, validate(ProductCreateSchema), productController.create)
+import { uploadSingle } from '../middleware/uploadMiddleware.js'
+
+// Accept either application/json with imagemUrl or multipart/form-data with file field 'image'
+router.post('/', authMiddleware, adminMiddleware, uploadSingle('image'), validate(ProductCreateSchema), productController.create)
 router.post('/bulk', authMiddleware, adminMiddleware, validate(ProductBulkSchema), productController.createBulk)
 router.get('/', productController.getAll)
 /**
@@ -88,7 +91,7 @@ router.get('/', productController.getAll)
  *               $ref: '#/components/schemas/ProductDetailResponse'
  */
 router.get('/:id', productController.getById)
-router.put('/:id', authMiddleware, adminMiddleware, productController.update)
+router.put('/:id', authMiddleware, adminMiddleware, uploadSingle('image'), productController.update)
 router.delete('/:id', authMiddleware, adminMiddleware, productController.remove)
 
 /**

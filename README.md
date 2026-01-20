@@ -287,6 +287,33 @@ Exemplo de criação de variação com cores:
 - POST /api/orders/checkout — cria pedido a partir do carrinho e gera preference do Mercado Pago (retorna `init_point`)
  - GET /api/orders/admin — lista todos os pedidos (apenas ADMIN). Query params opcionais: `status` (ex: PENDENTE, APROVADO), `userId` (uuid)
 
+### Favoritos
+
+- POST /api/favorites
+  - Adiciona um produto aos favoritos do usuário autenticado.
+  - Body: { produtoId: string }
+  - Resposta: 201 Created com o registro criado.
+  - Autenticação: Bearer token (veja nota sobre cabeçalhos abaixo).
+
+- GET /api/favorites
+  - Lista os produtos favoritados pelo usuário autenticado.
+  - Retorna array de produtos com campos: { id, nome, preco, slug, imagemUrl }.
+  - Autenticação: Bearer token.
+
+- DELETE /api/favorites/:produtoId
+  - Remove o produto dos favoritos do usuário autenticado.
+  - Autenticação: Bearer token.
+
+Nota importante sobre autenticação e cabeçalhos:
+
+- Este projeto suporta autenticação via cookie (`token`) e via header HTTP Authorization. Para chamadas API (por exemplo, usando curl, Postman ou do frontend), passe o JWT no header Authorization com o esquema Bearer:
+
+```bash
+Authorization: Bearer <SEU_JWT>
+```
+
+Algumas rotas podem também aceitar um cookie `token` com o JWT; o middleware `authMiddleware` verifica ambos (cookie `token` ou header Authorization). Nos exemplos e na documentação do Swagger, prefira usar o header Authorization para clareza.
+
 Observações sobre estoque e pagamento:
 - Stock decrement é realizado quando uma notificação de pagamento `APROVADO` é recebida via webhook (configurado em `/webhooks/mercadopago`).
 - Webhook precisa ser configurado no painel do Mercado Pago apontando para `POST /webhooks/mercadopago`.

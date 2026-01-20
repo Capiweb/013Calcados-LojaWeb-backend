@@ -14,6 +14,18 @@ export const getCart = async (req, res) => {
   }
 }
 
+// Lista os pedidos do usuário autenticado
+export const getMyOrders = async (req, res) => {
+  try {
+    const userId = req.userId
+    const pedidos = await orderService.listAllOrders({ where: { usuarioId: userId } })
+    return res.status(200).json(pedidos)
+  } catch (error) {
+    console.error('getMyOrders error:', error)
+    return res.status(500).json({ error: 'Erro ao obter pedidos do usuário' })
+  }
+}
+
 export const addItem = async (req, res) => {
   try {
     const userId = req.userId
@@ -210,16 +222,5 @@ export const getCartById = async (req, res) => {
   } catch (error) {
     console.error('getCartById error:', error)
     return res.status(500).json({ error: 'Erro ao obter carrinho' })
-  }
-}
-
-export const getMyOrders = async (req, res) => {
-  try {
-    const userId = req.userId
-    const pedidos = await orderService.getMyOrders(userId)
-    return res.status(200).json(pedidos)
-  } catch (error) {
-    console.error('getMyOrders error:', error)
-    return res.status(500).json({ error: 'Erro ao obter seus pedidos' })
   }
 }

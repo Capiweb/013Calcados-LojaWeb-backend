@@ -7,7 +7,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon src/index.js",
-  "build": "npx prisma@6.16.2 generate",
+    "build": "npx prisma@6.16.2 generate",
     "start": "node index.js",
     "render-start": "npx prisma@6.16.2 migrate deploy && node index.js",
     "postinstall": "npx prisma@6.16.2 generate"
@@ -26,11 +26,13 @@
   "dependencies": {
     "@prisma/client": "^6.16.2",
     "bcrypt": "^6.0.0",
+    "cloudinary": "^2.9.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
+    "multer": "^2.0.2",
     "node-fetch": "^2.6.7",
     "nodemon": "^3.1.11",
     "swagger-jsdoc": "^6.2.8",

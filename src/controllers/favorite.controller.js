@@ -6,6 +6,10 @@ import * as favoriteService from '../service/favorite.service.js'
 export const createFavorite = async (req, res, next) => {
   try {
     const { produtoId } = req.body; // O ID vem do corpo da requisição
+    // Validação simples: evitar passar undefined para o repositório/prisma
+    if (!produtoId) {
+      return res.status(400).json({ error: 'produtoId é obrigatório no corpo da requisição' })
+    }
     const usuarioId = req.user.id; // Extraído do token JWT pelo middleware de auth [3, 4]
 
     const favorito = await favoriteService.createFavorite({ usuarioId, produtoId });
