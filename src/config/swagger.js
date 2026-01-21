@@ -288,6 +288,7 @@ const options = {
           type: 'object',
           properties: {
             id: { type: 'string', format: 'uuid' },
+            estrelas: { type: 'number', description: 'Média de avaliações do produto (0.5 - 5.5)', example: 4.3 },
             nome: { type: 'string', example: 'Tênis Air Max' },
             descricao: { type: 'string', example: 'Tênis esportivo premium' },
             preco: { type: 'number', format: 'decimal', example: 299.99 },
@@ -300,6 +301,11 @@ const options = {
             variacoes: {
               type: 'array',
               items: { $ref: '#/components/schemas/ProdutoVariacao' },
+            },
+            feedbacks: {
+              type: 'array',
+              description: 'Lista de avaliações do produto (mais recentes primeiro)',
+              items: { $ref: '#/components/schemas/Feedback' }
             },
             criadoEm: { type: 'string', format: 'date-time' },
             atualizadoEm: { type: 'string', format: 'date-time' },
@@ -594,6 +600,17 @@ const options = {
                 $ref: '#/components/schemas/Product'
               }
             }
+          }
+        },
+        Feedback: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            usuarioId: { type: 'string', format: 'uuid' },
+            produtoId: { type: 'string', format: 'uuid' },
+            estrelas: { type: 'number', example: 4.5 },
+            comentario: { type: 'string' },
+            criadoEm: { type: 'string', format: 'date-time' }
           }
         },
         ProductDetailResponse: {
