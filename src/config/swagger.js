@@ -276,6 +276,7 @@ const options = {
           type: 'object',
           properties: {
             id: { type: 'string', format: 'uuid' },
+            estrelas: { type: 'number', description: 'Média de avaliações para esta variação (opcional)', example: 0 },
             tipoTamanho: { type: 'string', enum: ['NUMERICO', 'LETRA'], description: 'Tipo de tamanho' },
             tamanho: { type: 'string', example: '39', description: 'Valor do tamanho' },
             estoque: { type: 'integer', example: 15, description: 'Quantidade em estoque' },
@@ -288,7 +289,7 @@ const options = {
           type: 'object',
           properties: {
             id: { type: 'string', format: 'uuid' },
-            estrelas: { type: 'number', description: 'Média de avaliações do produto (0.5 - 5.5)', example: 4.3 },
+            estrelas: { type: 'number', description: 'Média de avaliações do produto (0.5 - 5.5)', example: 4.5 },
             nome: { type: 'string', example: 'Tênis Air Max' },
             descricao: { type: 'string', example: 'Tênis esportivo premium' },
             preco: { type: 'number', format: 'decimal', example: 299.99 },
