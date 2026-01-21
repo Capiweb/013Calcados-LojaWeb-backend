@@ -460,6 +460,10 @@ const options = {
             },
           },
           required: ['produtoVariacaoId', 'quantidade'],
+          example: {
+            produtoVariacaoId: '03f55e29-8ad8-4ce0-b5ec-c8133f2324cd',
+            quantidade: 1
+          }
         },
         CheckoutRequest: {
           type: 'object',
@@ -476,24 +480,41 @@ const options = {
                 estado: { type: 'string' },
                 cep: { type: 'string' },
               },
+              // endereco can be partial; controller will merge with saved address
               required: ['rua', 'numero', 'bairro', 'cidade', 'estado', 'cep'],
             },
           },
-          required: ['endereco'],
+          // Not strictly required: if omitted, server will use saved address
+          required: [],
+          example: {
+            endereco: {
+              rua: 'Av. Teste',
+              numero: '10',
+              complemento: 'Apto 1',
+              bairro: 'Centro',
+              cidade: 'São Paulo',
+              estado: 'SP',
+              cep: '01234-000'
+            }
+          }
         },
         CheckoutResponse: {
           type: 'object',
           properties: {
-            preference_url: {
+            url: {
               type: 'string',
               format: 'url',
-              description: 'URL para pagamento no Mercado Pago',
+              description: 'URL para checkout no Mercado Pago (init_point)'
             },
-            preference_id: {
-              type: 'string',
-              description: 'ID da preferência no Mercado Pago',
-            },
+            preference: {
+              type: 'object',
+              description: 'Objeto completo retornado pelo Mercado Pago ao criar a preferência'
+            }
           },
+          example: {
+            url: 'https://www.mercadopago.com/checkout/v1/redirect?pref_id=1234567890',
+            preference: { id: '1234567890', init_point: 'https://www.mercadopago.com/checkout/v1/redirect?pref_id=1234567890' }
+          }
         },
 
         /* ========== SCHEMAS DE ERRO ========== */
