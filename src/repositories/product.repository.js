@@ -110,6 +110,7 @@ export const findProducts = async ({ where, skip, take, orderBy }) => {
       preco: true,
       emPromocao: true,
       precoPromocional: true,
+      estrelas: true,
     },
   })
 }
