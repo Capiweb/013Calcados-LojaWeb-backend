@@ -65,6 +65,19 @@ export const findProductById = async (id) => {
       include: {
         categoria: true,
         variacoes: true,
+        feedbacks: {
+          include: {
+            usuario: {
+              select: {
+                id: true,
+                nome: true,
+              },
+            },
+          },
+          orderBy: {
+            criadoEm: 'desc',
+          },
+        },
       },
     })
   } catch (err) {
@@ -84,7 +97,20 @@ export const findProductById = async (id) => {
               sku: true,
               criadoEm: true
             }
-          }
+          },
+          feedbacks: {
+            include: {
+              usuario: {
+                select: {
+                  id: true,
+                  nome: true,
+                },
+              },
+            },
+            orderBy: {
+              criadoEm: 'desc',
+            },
+          },
         }
       })
     }
