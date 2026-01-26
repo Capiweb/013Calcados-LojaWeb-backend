@@ -40,14 +40,14 @@ export const loginUser = async (email, senha) => {
   const user = await userRepository.findUserByEmail(email);
   
   if (!user) {
-    throw new Error('Credenciais inválidas');
+    throw new Error('Email inválido');
   }
 
   // Comparar senha informada com o hash salvo
   const isPasswordValid = await bcrypt.compare(senha, user.senha);
   
   if (!isPasswordValid) {
-    throw new Error('Credenciais inválidas');
+    throw new Error('Senha inválida');
   }
 
   // Validar JWT_SECRET
