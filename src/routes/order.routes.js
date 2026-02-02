@@ -111,6 +111,7 @@ router.delete('/cart/items/:id', authMiddleware, orderController.removeItem)
  *         description: OK
  */
 router.post('/checkout', authMiddleware, validate(CheckoutSchema), orderController.checkout)
+router.get('/:id', authMiddleware, orderController.getOrderById)
 
 /**
  * @swagger

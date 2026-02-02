@@ -11,5 +11,6 @@ export const EnderecoSchema = z.object({
 })
 
 export const CheckoutSchema = z.object({
-  endereco: EnderecoSchema.optional()
+  // allow sending a partial endereco; controller will merge with saved address
+  endereco: EnderecoSchema.partial().optional()
 })

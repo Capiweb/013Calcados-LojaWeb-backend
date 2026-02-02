@@ -1,5 +1,6 @@
 import * as orderService from '../service/order.service.js'
 import * as enderecoService from '../service/endereco.service.js'
+import { EnderecoSchema } from '../validators/order.validator.js'
 import * as userService from '../service/user.js'
 import fetch from 'node-fetch'
 
@@ -77,16 +78,23 @@ export const checkout = async (req, res) => {
     const MP_ACCESS_TOKEN = process.env.MP_ACCESS_TOKEN
     if (!MP_ACCESS_TOKEN) return res.status(500).json({ error: 'MP_ACCESS_TOKEN não configurado no servidor' })
 
-    // If no endereco provided in request, try to get user's most recent address
-    let endereco = req.body?.endereco
-    if (!endereco) {
-      try {
-        const enderecos = await enderecoService.listEnderecosDoUsuario(userId)
-        // pick the most recent endereco if any
-        if (enderecos && enderecos.length) endereco = enderecos[0]
-      } catch (e) {
-        // ignore: we'll fail later if endereco is required
-      }
+    // Merge provided partial endereco with user's saved endereco (prefer provided fields)
+    let provided = req.body?.endereco || {}
+    let saved = {}
+    try {
+      const enderecos = await enderecoService.listEnderecosDoUsuario(userId)
+      if (enderecos && enderecos.length) saved = enderecos[0]
+    } catch (e) {
+      // ignore
+    }
+    const endereco = { ...(saved || {}), ...(provided || {}) }
+
+    // Validate merged endereco - require essential fields
+    try {
+      EnderecoSchema.parse(endereco)
+    } catch (e) {
+      // return validation error to client
+      return res.status(400).json({ error: e.errors || e.message })
     }
 
     // Create pedido in DB from cart (freeze address) before creating preference
@@ -151,6 +159,13 @@ export const checkout = async (req, res) => {
     mpBody.notification_url = process.env.MP_NOTIFICATION_URL || process.env.MP_WEBHOOK_URL || undefined
     mpBody.auto_return = process.env.MP_AUTO_RETURN || 'approved'
 
+    // Ensure we don't exclude payment methods (help show PIX if account supports it)
+    mpBody.payment_methods = mpBody.payment_methods || {
+      installments: 1,
+      excluded_payment_methods: [],
+      excluded_payment_types: []
+    }
+
     const mpRes = await fetch('https://api.mercadopago.com/checkout/preferences', {
       method: 'POST',
       headers: {
@@ -170,12 +185,24 @@ export const checkout = async (req, res) => {
     }
 
     const data = JSON.parse(txt)
-    const resp = { url: data.init_point, preference: data }
+    const resp = { url: data.init_point, preference: data, pedidoId: pedido?.id }
     if (xRequestId) resp.xRequestId = xRequestId
     return res.status(200).json(resp)
   } catch (error) {
     console.error('checkout error:', error)
     return res.status(500).json({ error: 'Erro ao criar checkout' })
+  }
+}
+
+export const getOrderById = async (req, res) => {
+  try {
+    const { id } = req.params
+    const pedido = await orderService.getOrderById(id)
+    if (!pedido) return res.status(404).json({ error: 'Pedido não encontrado' })
+    return res.status(200).json(pedido)
+  } catch (error) {
+    console.error('getOrderById error:', error)
+    return res.status(500).json({ error: 'Erro ao obter pedido' })
   }
 }
 

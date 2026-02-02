@@ -2,6 +2,7 @@ import * as cartRepo from '../repositories/cart.repository.js'
 import * as orderRepo from '../repositories/order.repository.js'
 import fetch from 'node-fetch'
 import * as productRepo from '../repositories/product.repository.js'
+import { getIo } from '../utils/io.js'
 
 const MP_ACCESS_TOKEN = process.env.MP_ACCESS_TOKEN
 const MP_BASE = 'https://api.mercadopago.com'
@@ -177,6 +178,14 @@ export const handleMpNotification = async (body) => {
   if (existingByPagamentoId) {
     // já existe um registro com este paymentId -> apenas atualizar status
     await orderRepo.updatePaymentStatus(paymentId, mapped)
+    // emit socket event for order update if possible
+    try {
+      const io = getIo()
+      const pedido = await orderRepo.getOrderByPaymentId(paymentId)
+      if (io && pedido) io.to(`order:${pedido.id}`).emit('order.updated', { orderId: pedido.id, status: mapped })
+    } catch (e) {
+      console.warn('socket emit failed (existingByPagamentoId)', e?.message || e)
+    }
   } else if (pedidoIdFromMp) {
     // se MP retornou external_reference (pedidoId) ou preference_id, tente vincular
     // buscar pagamento já atrelado ao pedido (por exemplo, preferência criada no checkout)
@@ -185,9 +194,21 @@ export const handleMpNotification = async (body) => {
       // atualizar o pagamento existente para registrar o novo pagamentoId e status
       await orderRepo.updatePaymentId(existingByPedido.pagamentoId, paymentId)
       await orderRepo.updatePaymentStatus(paymentId, mapped)
+      try {
+        const io = getIo()
+        if (io && pedidoIdFromMp) io.to(`order:${pedidoIdFromMp}`).emit('order.updated', { orderId: pedidoIdFromMp, status: mapped })
+      } catch (e) {
+        console.warn('socket emit failed (existingByPedido)', e?.message || e)
+      }
     } else {
       // criar novo pagamento vinculado ao pedido
       await orderRepo.createPaymentForPedido(pedidoIdFromMp, paymentId, { provedor: 'mercado_pago', status: mapped })
+      try {
+        const io = getIo()
+        if (io && pedidoIdFromMp) io.to(`order:${pedidoIdFromMp}`).emit('order.updated', { orderId: pedidoIdFromMp, status: mapped })
+      } catch (e) {
+        console.warn('socket emit failed (createPaymentForPedido)', e?.message || e)
+      }
     }
   } else {
     // último recurso: criar registro de pagamento sem pedido (será necessário reconciliar manualmente)
@@ -204,6 +225,13 @@ export const handleMpNotification = async (body) => {
         await productRepo.decrementStock(it.produtoVariacaoId, it.quantidade)
       }
     }
+      // emit socket event for approval
+      try {
+        const io = getIo()
+        if (io && pedido) io.to(`order:${pedido.id}`).emit('order.updated', { orderId: pedido.id, status: mapped })
+      } catch (e) {
+        console.warn('socket emit failed (APROVADO)', e?.message || e)
+      }
   }
 
   return { ok: true, mpStatus: data.status }

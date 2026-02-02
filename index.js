@@ -15,6 +15,8 @@ import debugRoutes from './src/routes/debug.routes.js'
 import favoriteRoutes from './src/routes/favorite.routes.js'
 import enderecoRoutes from './src/routes/endereco.routes.js'
 import * as orderService from './src/service/order.service.js'
+import { initIo } from './src/utils/io.js'
+import http from 'http'
 const app = express()
 
 // CORS configuration
@@ -79,7 +81,16 @@ app.use('/debug', debugRoutes)
 
 
 const PORT = process.env.PORT || 3000
-app.listen(PORT, () => {
+const server = http.createServer(app)
+
+// Initialize Socket.IO
+try {
+  initIo(server)
+} catch (e) {
+  console.warn('Socket.IO init failed:', e?.message || e)
+}
+
+server.listen(PORT, () => {
   console.log(`🚀 Rodando em http://localhost:${PORT}`)
 })
 
