@@ -1,12 +1,39 @@
 import * as orderService from '../service/order.service.js'
 
-export const mpNotification = async (req, res) => {
+// Normalize Mercado Pago webhook payloads and process asynchronously.
+// MP may send different shapes: body.data.id, body.id, query params, etc.
+export const mpNotification = (req, res) => {
   try {
-    const body = req.body
-    const result = await orderService.handleMpNotification(body)
-    return res.status(200).json(result)
+    const body = req.body || {}
+    const query = req.query || {}
+
+    // Common places MP uses to provide payment id
+    const paymentId = body?.data?.id || body?.id || body?.collection?.id || body?.resource?.id || query?.id || query?.payment_id || null
+
+    if (!paymentId) {
+      // Log context to help debugging but acknowledge immediately so MP won't keep retrying
+      console.warn('mpNotification ignored: payment id not provided', {
+        headers: req.headers,
+        query,
+        body: typeof body === 'object' ? body : String(body)
+      })
+      return res.status(200).json({ ok: true, ignored: true })
+    }
+
+    // Acknowledge receipt quickly, then process in background
+    res.status(200).json({ ok: true, processing: true })
+
+    // Process async without blocking the response
+    setImmediate(async () => {
+      try {
+        await orderService.handleMpNotification({ id: paymentId })
+      } catch (err) {
+        console.error('mpNotification background processing error:', err?.message || err)
+      }
+    })
   } catch (error) {
-    console.error('mpNotification', error)
-    return res.status(500).json({ error: 'Erro ao processar notificação' })
+    console.error('mpNotification handler error:', error?.message || error)
+    // Return 200 to avoid repeated retries from MP in case of unexpected handler error
+    return res.status(200).json({ ok: true, error: true })
   }
 }
