@@ -1,5 +1,6 @@
 import express from 'express'
 import { paymentsByOrder } from '../controllers/debug.controller.js'
+import { inspectNotification } from '../controllers/debug.controller.js'
 
 const router = express.Router()
 
@@ -8,5 +9,6 @@ const router = express.Router()
  * Consulta o Mercado Pago por pagamentos associados a external_reference = orderId
  */
 router.get('/mp/payments-by-order/:orderId', paymentsByOrder)
+router.get('/mp/inspect/:id', inspectNotification)
 
 export default router

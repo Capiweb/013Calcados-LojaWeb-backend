@@ -160,6 +160,10 @@ export const linkPaymentToOrder = async (pedidoId, pagamentoData) => {
   return orderRepo.linkPayment(pedidoId, pagamentoData)
 }
 
+export const updatePaymentId = async (oldPagamentoId, newPagamentoId) => {
+  return orderRepo.updatePaymentId(oldPagamentoId, newPagamentoId)
+}
+
 export const handleMpNotification = async (body) => {
   // Exemplo de body com payment id -> buscar payment info no MP e atualizar status
   // Implementação simples: receber { id: payment_id }
@@ -242,11 +246,55 @@ export const handleMpNotification = async (body) => {
   try {
     return await processPaymentById(incomingId)
   } catch (err) {
-    // If payment endpoint returns 404 or similar, it may be a merchant_order id
+    // If payment endpoint returns 404 or similar, try other searches: preference_id, external_reference, then merchant_order
     const errMsg = String(err.message || '')
-    if (errMsg.includes('404') || errMsg.toLowerCase().includes('resource not found')) {
-      console.log(`handleMpNotification: payment ${incomingId} not found, trying merchant_orders/${incomingId}`)
-      // try merchant_orders
+    if (errMsg.includes('404') || errMsg.toLowerCase().includes('resource not found') || errMsg.toLowerCase().includes('not_found')) {
+      console.log(`handleMpNotification: payment ${incomingId} not found, trying payments search by preference_id / external_reference for ${incomingId}`)
+
+      // 1) Try payments search by preference_id
+      try {
+        const searchUrlPref = `${MP_BASE}/v1/payments/search?preference_id=${encodeURIComponent(incomingId)}`
+        const s1 = await fetch(searchUrlPref, { headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` } })
+        if (s1.ok) {
+          const js = await s1.json()
+          const results = js.results || []
+          if (results.length > 0) {
+            const processed = []
+            for (const p of results) {
+              if (p.id) {
+                try { processed.push(await processPaymentById(p.id)) } catch (e) { console.error('processing payment from preference search failed', e?.message || e) }
+              }
+            }
+            return { ok: true, processedPreferenceSearch: processed }
+          }
+        }
+      } catch (e) {
+        console.warn('preference_id search failed:', e?.message || e)
+      }
+
+      // 2) Try payments search by external_reference
+      try {
+        const searchUrlExt = `${MP_BASE}/v1/payments/search?external_reference=${encodeURIComponent(incomingId)}`
+        const s2 = await fetch(searchUrlExt, { headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` } })
+        if (s2.ok) {
+          const js2 = await s2.json()
+          const results2 = js2.results || []
+          if (results2.length > 0) {
+            const processed2 = []
+            for (const p of results2) {
+              if (p.id) {
+                try { processed2.push(await processPaymentById(p.id)) } catch (e) { console.error('processing payment from external_reference search failed', e?.message || e) }
+              }
+            }
+            return { ok: true, processedExternalReferenceSearch: processed2 }
+          }
+        }
+      } catch (e) {
+        console.warn('external_reference search failed:', e?.message || e)
+      }
+
+      // 3) Try merchant_orders
+      console.log(`handleMpNotification: trying merchant_orders/${incomingId}`)
       try {
         const moRes = await fetch(`${MP_BASE}/v1/merchant_orders/${incomingId}`, { headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` } })
         if (!moRes.ok) {
@@ -256,13 +304,11 @@ export const handleMpNotification = async (body) => {
           throw new Error('MP consulta merchant_order failed')
         }
         const mo = await moRes.json()
-        // mo.payments is an array of payment objects with id
         const payments = mo.payments || []
         if (payments.length === 0) {
           console.warn('merchant_order has no payments to process for id=', incomingId)
           return { ok: true, note: 'merchant_order_no_payments' }
         }
-        // Process each payment id sequentially
         const results = []
         for (const p of payments) {
           if (p.id) {
