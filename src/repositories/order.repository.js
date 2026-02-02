@@ -59,3 +59,7 @@ export const deletePendingPaymentsOlderThan = async (cutoffDate) => {
   // cutoffDate should be a JS Date or ISO string
   return prisma.pagamento.deleteMany({ where: { status: 'PENDENTE', criadoEm: { lt: cutoffDate } } })
 }
+
+export const updateOrderStatus = async (pedidoId, status) => {
+  return prisma.pedido.update({ where: { id: pedidoId }, data: { status } })
+}
