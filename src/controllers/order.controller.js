@@ -166,6 +166,9 @@ export const checkout = async (req, res) => {
       excluded_payment_types: []
     }
 
+    // Debug: log MP body (avoid logging secrets)
+    try { console.log('MP preference request body:', JSON.stringify(mpBody)) } catch (e) {}
+
     const mpRes = await fetch('https://api.mercadopago.com/checkout/preferences', {
       method: 'POST',
       headers: {
@@ -179,12 +182,15 @@ export const checkout = async (req, res) => {
     const xRequestId = mpRes.headers && typeof mpRes.headers.get === 'function' ? mpRes.headers.get('x-request-id') : undefined
     if (!mpRes.ok) {
       console.error('MP create preference error:', { status: mpRes.status, xRequestId, body: txt })
-      const payload = { error: 'Erro ao criar preferência Mercado Pago', details: txt }
+      const payload = { error: 'Erro ao criar prefer\u00eancia Mercado Pago', details: txt }
       if (xRequestId) payload.xRequestId = xRequestId
       return res.status(502).json(payload)
     }
 
     const data = JSON.parse(txt)
+    // Debug log preference id and init_point
+    try { console.log(`MP preference response: preference_id=${data.id || data.preference_id} init_point=${data.init_point || data.sandbox_init_point} x-request-id=${xRequestId}`) } catch (e) {}
+
     const resp = { url: data.init_point, preference: data, pedidoId: pedido?.id }
     if (xRequestId) resp.xRequestId = xRequestId
     return res.status(200).json(resp)

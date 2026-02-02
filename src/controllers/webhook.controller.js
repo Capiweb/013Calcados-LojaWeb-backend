@@ -26,7 +26,11 @@ export const mpNotification = (req, res) => {
     // Process async without blocking the response
     setImmediate(async () => {
       try {
+        // Debug start
+        const xr = req.headers && (req.headers['x-request-id'] || req.headers['x-request-start'])
+        console.log(`mpNotification processing start: paymentId=${paymentId} x-request-id=${xr}`)
         await orderService.handleMpNotification({ id: paymentId })
+        console.log(`mpNotification processing finished: paymentId=${paymentId}`)
       } catch (err) {
         console.error('mpNotification background processing error:', err?.message || err)
       }

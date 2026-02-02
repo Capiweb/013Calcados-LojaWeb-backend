@@ -131,12 +131,28 @@ export const createMercadoPagoPreference = async (pedido) => {
     body: JSON.stringify(body)
   })
 
+  const xRequestId = res.headers && typeof res.headers.get === 'function' ? res.headers.get('x-request-id') : undefined
+  const rawText = await res.text()
   if (!res.ok) {
-    const txt = await res.text()
-    throw new Error(`MP error: ${res.status} ${txt}`)
+    console.error(`MP create preference error: status=${res.status} x-request-id=${xRequestId} body=${rawText}`)
+    throw new Error(`MP error: ${res.status} ${rawText}`)
   }
 
-  const data = await res.json()
+  let data
+  try {
+    data = JSON.parse(rawText)
+  } catch (e) {
+    console.warn('MP create preference: failed to parse JSON, raw body:', rawText)
+    throw new Error('MP create preference: invalid JSON response')
+  }
+
+  // Debug log: preference id and init_point if present
+  try {
+    console.log(`MP preference created: preference_id=${data.id || data.preference_id} init_point=${data.init_point || data.sandbox_init_point} x-request-id=${xRequestId}`)
+  } catch (e) {
+    // ignore
+  }
+
   return data
 }
 
@@ -151,10 +167,33 @@ export const handleMpNotification = async (body) => {
   if (!paymentId) throw new Error('payment id not provided')
 
   // consultar MP para obter status
-  const res = await fetch(`${MP_BASE}/payments/${paymentId}`, {
-    headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` }
-  })
-  if (!res.ok) throw new Error('MP consulta failed')
+  if (!MP_ACCESS_TOKEN) {
+    const msg = `MP_ACCESS_TOKEN is not configured; cannot query payment ${paymentId}`
+    console.error(msg)
+    throw new Error(msg)
+  }
+
+  let res
+  try {
+    res = await fetch(`${MP_BASE}/payments/${paymentId}`, {
+      headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` }
+    })
+  } catch (err) {
+    console.error(`MP request network error for payment ${paymentId}:`, err?.message || err)
+    throw new Error('MP consulta failed')
+  }
+
+  if (!res.ok) {
+    let txt = ''
+    try {
+      txt = await res.text()
+    } catch (e) {
+      txt = '<failed to read response body>'
+    }
+    console.error(`MP consulta returned error for payment ${paymentId}: status=${res.status} body=${txt} token=${maskToken(MP_ACCESS_TOKEN)}`)
+    throw new Error(`MP consulta failed: ${res.status} ${txt}`)
+  }
+
   const data = await res.json()
 
   // exemplo: data.status -> 'approved' ou 'pending' ou 'rejected'
