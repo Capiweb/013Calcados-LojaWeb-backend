@@ -108,8 +108,8 @@ export const login = async (req, res) => {
   } catch (error) {
     logError('auth.login', error, { body: req.body });
 
-    // Tratar erro de credenciais inválidas
-    if (error.message === 'Credenciais inválidas') {
+    // Tratar erros de autenticação - retornar mensagem específica
+    if (error.message === 'Email inválido' || error.message === 'Senha inválida') {
       return res.status(401).json({
         error: error.message,
       });
