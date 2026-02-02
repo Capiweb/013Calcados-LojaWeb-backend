@@ -34,7 +34,9 @@ export const inspectNotification = async (req, res) => {
 
     // Try payments
     try {
-      const r = await fetch(`${MP_BASE}/v1/payments/${id}`, { headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` } })
+      const pUrl = `${MP_BASE}/v1/payments/${id}`
+      console.log(`DEBUG MP GET ${pUrl} Authorization: Bearer ${maskToken(MP_ACCESS_TOKEN)}`)
+      const r = await fetch(pUrl, { headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` } })
       results.payment = { status: r.status }
       try { results.payment.body = await r.json() } catch (e) { results.payment.body = await r.text().catch(() => '<no-body>') }
     } catch (e) { results.payment = { error: String(e) } }

@@ -29,7 +29,10 @@ export const mpNotification = (req, res) => {
         // Debug start
         const xr = req.headers && (req.headers['x-request-id'] || req.headers['x-request-start'])
         console.log(`mpNotification processing start: paymentId=${paymentId} x-request-id=${xr}`)
-        await orderService.handleMpNotification({ id: paymentId })
+        // forward the id inside a data object to match MP payload shape
+        const forwarded = { data: { id: paymentId } }
+        console.log(`mpNotification forwarding to service: ${JSON.stringify(forwarded)}`)
+        await orderService.handleMpNotification(forwarded)
         console.log(`mpNotification processing finished: paymentId=${paymentId}`)
       } catch (err) {
         console.error('mpNotification background processing error:', err?.message || err)

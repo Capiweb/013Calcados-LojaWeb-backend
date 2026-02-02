@@ -191,17 +191,6 @@ export const checkout = async (req, res) => {
     // Debug log preference id and init_point
     try { console.log(`MP preference response: preference_id=${data.id || data.preference_id} init_point=${data.init_point || data.sandbox_init_point} x-request-id=${xRequestId}`) } catch (e) {}
 
-    // If we created a placeholder pagamento, update its pagamentoId to the preference id
-    try {
-      if (placeholderPagamentoId && data && (data.id || data.preference_id)) {
-        const prefId = data.id || data.preference_id
-        console.log(`Updating placeholder pagamentoId ${placeholderPagamentoId} -> ${prefId}`)
-        await orderService.updatePaymentId(placeholderPagamentoId, prefId)
-      }
-    } catch (e) {
-      console.warn('Failed to update pagamentoId to preference id:', e?.message || e)
-    }
-
     const resp = { url: data.init_point, preference: data, pedidoId: pedido?.id }
     if (xRequestId) resp.xRequestId = xRequestId
     return res.status(200).json(resp)

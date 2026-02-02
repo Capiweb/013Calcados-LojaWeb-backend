@@ -181,7 +181,9 @@ export const handleMpNotification = async (body) => {
     // fetch payment
     let r
     try {
-      r = await fetch(`${MP_BASE}/v1/payments/${paymentIdToProcess}`, { headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` } })
+      const paymentUrl = `${MP_BASE}/v1/payments/${paymentIdToProcess}`
+      console.log(`MP GET ${paymentUrl} Authorization: Bearer ${maskToken(MP_ACCESS_TOKEN)}`)
+      r = await fetch(paymentUrl, { headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` } })
     } catch (err) {
       console.error(`MP request network error for payment ${paymentIdToProcess}:`, err?.message || err)
       throw new Error('MP consulta failed')
@@ -253,8 +255,9 @@ export const handleMpNotification = async (body) => {
 
       // 1) Try payments search by preference_id
       try {
-        const searchUrlPref = `${MP_BASE}/v1/payments/search?preference_id=${encodeURIComponent(incomingId)}`
-        const s1 = await fetch(searchUrlPref, { headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` } })
+  const searchUrlPref = `${MP_BASE}/v1/payments/search?preference_id=${encodeURIComponent(incomingId)}`
+  console.log(`MP GET ${searchUrlPref} Authorization: Bearer ${maskToken(MP_ACCESS_TOKEN)}`)
+  const s1 = await fetch(searchUrlPref, { headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` } })
         if (s1.ok) {
           const js = await s1.json()
           const results = js.results || []
@@ -274,8 +277,9 @@ export const handleMpNotification = async (body) => {
 
       // 2) Try payments search by external_reference
       try {
-        const searchUrlExt = `${MP_BASE}/v1/payments/search?external_reference=${encodeURIComponent(incomingId)}`
-        const s2 = await fetch(searchUrlExt, { headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` } })
+  const searchUrlExt = `${MP_BASE}/v1/payments/search?external_reference=${encodeURIComponent(incomingId)}`
+  console.log(`MP GET ${searchUrlExt} Authorization: Bearer ${maskToken(MP_ACCESS_TOKEN)}`)
+  const s2 = await fetch(searchUrlExt, { headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` } })
         if (s2.ok) {
           const js2 = await s2.json()
           const results2 = js2.results || []
@@ -296,7 +300,9 @@ export const handleMpNotification = async (body) => {
       // 3) Try merchant_orders
       console.log(`handleMpNotification: trying merchant_orders/${incomingId}`)
       try {
-        const moRes = await fetch(`${MP_BASE}/v1/merchant_orders/${incomingId}`, { headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` } })
+  const moUrl = `${MP_BASE}/v1/merchant_orders/${incomingId}`
+  console.log(`MP GET ${moUrl} Authorization: Bearer ${maskToken(MP_ACCESS_TOKEN)}`)
+  const moRes = await fetch(moUrl, { headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` } })
         if (!moRes.ok) {
           let txt = ''
           try { txt = await moRes.text() } catch (e) { txt = '<failed to read response body>' }
