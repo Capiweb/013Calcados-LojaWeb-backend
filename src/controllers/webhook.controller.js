@@ -29,6 +29,9 @@ export const mpNotification = (req, res) => {
         // Debug start
         const xr = req.headers && (req.headers['x-request-id'] || req.headers['x-request-start'])
         console.log(`mpNotification processing start: paymentId=${paymentId} x-request-id=${xr}`)
+        // NOTE: service.handleMpNotification now treats payments GET as the single source
+        // of truth for payment status. If the GET /v1/payments/:id returns 404 the
+        // service will NOT perform additional MP searches (preference/external_reference/merchant_orders).
         // forward the id inside a data object to match MP payload shape
         const forwarded = { data: { id: paymentId } }
         console.log(`mpNotification forwarding to service: ${JSON.stringify(forwarded)}`)

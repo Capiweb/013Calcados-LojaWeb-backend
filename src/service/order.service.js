@@ -192,6 +192,10 @@ export const handleMpNotification = async (body) => {
       let txt = ''
       try { txt = await r.text() } catch (e) { txt = '<failed to read response body>' }
       console.error(`MP consulta returned error for payment ${paymentIdToProcess}: status=${r.status} body=${txt} token=${maskToken(MP_ACCESS_TOKEN)}`)
+      // If MP reports 404 (resource not found) we won't attempt other MP endpoints here.
+      // The payments GET is our single source of truth for status updates. Return a
+      // structured result indicating not-found so the caller (webhook) can decide.
+      if (r.status === 404) return { ok: false, notFound: true, status: r.status, body: txt }
       throw new Error(`MP consulta failed: ${r.status} ${txt}`)
     }
     const paymentData = await r.json()
@@ -209,7 +213,8 @@ export const handleMpNotification = async (body) => {
     const pagamentoId = paymentIdToProcess
 
     const existingByPagamentoId = await orderRepo.findPaymentByPagamentoId(pagamentoId)
-    const pedidoIdFromMp = paymentData.external_reference || paymentData.preference_id || null
+  // Prefer explicit linkers: external_reference, preference_id or merchant order id
+  const pedidoIdFromMp = paymentData.external_reference || paymentData.preference_id || (paymentData.order && paymentData.order.id) || null
 
     if (existingByPagamentoId) {
       await orderRepo.updatePaymentStatus(pagamentoId, mapped)
@@ -246,168 +251,16 @@ export const handleMpNotification = async (body) => {
 
   // First, try to treat incomingId as a payment id
   try {
-    return await processPaymentById(incomingId)
-  } catch (err) {
-    // If payment endpoint returns 404 or similar, try other searches: preference_id, external_reference, then merchant_order
-    const errMsg = String(err.message || '')
-    if (errMsg.includes('404') || errMsg.toLowerCase().includes('resource not found') || errMsg.toLowerCase().includes('not_found')) {
-      console.log(`handleMpNotification: payment ${incomingId} not found, trying payments search by preference_id / external_reference for ${incomingId}`)
-
-      // 1) Try payments search by preference_id
-      try {
-  const searchUrlPref = `${MP_BASE}/v1/payments/search?preference_id=${encodeURIComponent(incomingId)}`
-  console.log(`MP GET ${searchUrlPref} Authorization: Bearer ${maskToken(MP_ACCESS_TOKEN)}`)
-  const s1 = await fetch(searchUrlPref, { headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` } })
-        if (s1.ok) {
-          const js = await s1.json()
-          const results = js.results || []
-          if (results.length > 0) {
-            const processed = []
-            for (const p of results) {
-              if (p.id) {
-                try { processed.push(await processPaymentById(p.id)) } catch (e) { console.error('processing payment from preference search failed', e?.message || e) }
-              }
-            }
-            return { ok: true, processedPreferenceSearch: processed }
-          }
-        }
-      } catch (e) {
-        console.warn('preference_id search failed:', e?.message || e)
-      }
-
-      // 2) Try payments search by external_reference
-      try {
-  const searchUrlExt = `${MP_BASE}/v1/payments/search?external_reference=${encodeURIComponent(incomingId)}`
-  console.log(`MP GET ${searchUrlExt} Authorization: Bearer ${maskToken(MP_ACCESS_TOKEN)}`)
-  const s2 = await fetch(searchUrlExt, { headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` } })
-        if (s2.ok) {
-          const js2 = await s2.json()
-          const results2 = js2.results || []
-          if (results2.length > 0) {
-            const processed2 = []
-            for (const p of results2) {
-              if (p.id) {
-                try { processed2.push(await processPaymentById(p.id)) } catch (e) { console.error('processing payment from external_reference search failed', e?.message || e) }
-              }
-            }
-            return { ok: true, processedExternalReferenceSearch: processed2 }
-          }
-        }
-      } catch (e) {
-        console.warn('external_reference search failed:', e?.message || e)
-      }
-
-      // 3) Try merchant_orders
-      console.log(`handleMpNotification: trying merchant_orders/${incomingId}`)
-      try {
-  const moUrl = `${MP_BASE}/v1/merchant_orders/${incomingId}`
-  console.log(`MP GET ${moUrl} Authorization: Bearer ${maskToken(MP_ACCESS_TOKEN)}`)
-  const moRes = await fetch(moUrl, { headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` } })
-        if (!moRes.ok) {
-          let txt = ''
-          try { txt = await moRes.text() } catch (e) { txt = '<failed to read response body>' }
-          console.error(`MP merchant_order lookup failed for ${incomingId}: status=${moRes.status} body=${txt}`)
-          throw new Error('MP consulta merchant_order failed')
-        }
-        const mo = await moRes.json()
-        const payments = mo.payments || []
-        if (payments.length === 0) {
-          console.warn('merchant_order has no payments to process for id=', incomingId)
-          return { ok: true, note: 'merchant_order_no_payments' }
-        }
-        const results = []
-        for (const p of payments) {
-          if (p.id) {
-            try { const r = await processPaymentById(p.id); results.push(r) } catch (e) { console.error('processing payment from merchant_order failed', e?.message || e) }
-          }
-        }
-        return { ok: true, processed: results }
-      } catch (e) {
-        console.error('merchant_order fallback failed:', e?.message || e)
-        throw e
-      }
+    const resProcess = await processPaymentById(incomingId)
+    if (resProcess && resProcess.notFound) {
+      console.log(`handleMpNotification: payment ${incomingId} not found (payments GET returned 404). Skipping fallback searches as configured.`)
+      return { ok: true, note: 'payment_not_found' }
     }
+    return resProcess
+  } catch (err) {
+    // propagate unexpected errors
     throw err
   }
-
-  // exemplo: data.status -> 'approved' ou 'pending' ou 'rejected'
-  const statusMap = {
-    approved: 'APROVADO',
-    pending: 'PENDENTE',
-    rejected: 'REJEITADO',
-    refunded: 'REEMBOLSADO'
-  }
-
-  const mpStatus = data.status
-  const mapped = statusMap[mpStatus] || 'PENDENTE'
-
-  // criar ou atualizar registro de pagamento no DB
-  // tentar localizar registro de pagamento já criado (vinculado à preference no checkout)
-  const existingByPagamentoId = await orderRepo.findPaymentByPagamentoId(paymentId)
-
-  // tentar buscar pedido via payment object (external_reference or preference_id)
-  const pedidoIdFromMp = data.external_reference || data.preference_id || null
-
-  if (existingByPagamentoId) {
-    // já existe um registro com este paymentId -> apenas atualizar status
-    await orderRepo.updatePaymentStatus(paymentId, mapped)
-    // emit socket event for order update if possible
-    try {
-      const io = getIo()
-      const pedido = await orderRepo.getOrderByPaymentId(paymentId)
-      if (io && pedido) io.to(`order:${pedido.id}`).emit('order.updated', { orderId: pedido.id, status: mapped })
-    } catch (e) {
-      console.warn('socket emit failed (existingByPagamentoId)', e?.message || e)
-    }
-  } else if (pedidoIdFromMp) {
-    // se MP retornou external_reference (pedidoId) ou preference_id, tente vincular
-    // buscar pagamento já atrelado ao pedido (por exemplo, preferência criada no checkout)
-    const existingByPedido = await orderRepo.findPaymentByPedidoId(pedidoIdFromMp)
-    if (existingByPedido) {
-      // atualizar o pagamento existente para registrar o novo pagamentoId e status
-      await orderRepo.updatePaymentId(existingByPedido.pagamentoId, paymentId)
-      await orderRepo.updatePaymentStatus(paymentId, mapped)
-      try {
-        const io = getIo()
-        if (io && pedidoIdFromMp) io.to(`order:${pedidoIdFromMp}`).emit('order.updated', { orderId: pedidoIdFromMp, status: mapped })
-      } catch (e) {
-        console.warn('socket emit failed (existingByPedido)', e?.message || e)
-      }
-    } else {
-      // criar novo pagamento vinculado ao pedido
-      await orderRepo.createPaymentForPedido(pedidoIdFromMp, paymentId, { provedor: 'mercado_pago', status: mapped })
-      try {
-        const io = getIo()
-        if (io && pedidoIdFromMp) io.to(`order:${pedidoIdFromMp}`).emit('order.updated', { orderId: pedidoIdFromMp, status: mapped })
-      } catch (e) {
-        console.warn('socket emit failed (createPaymentForPedido)', e?.message || e)
-      }
-    }
-  } else {
-    // último recurso: criar registro de pagamento sem pedido (será necessário reconciliar manualmente)
-    await orderRepo.linkPayment(null, { provedor: 'mercado_pago', pagamentoId: paymentId, status: mapped })
-  }
-
-  // quando aprovado, decrementar estoque dos itens do pedido
-  if (mapped === 'APROVADO') {
-    // buscar pedido relacionado ao pagamento
-    const pedido = await orderRepo.getOrderByPaymentId(paymentId)
-    if (pedido && pedido.itens) {
-      for (const it of pedido.itens) {
-        // decrementStock returns number of rows affected
-        await productRepo.decrementStock(it.produtoVariacaoId, it.quantidade)
-      }
-    }
-      // emit socket event for approval
-      try {
-        const io = getIo()
-        if (io && pedido) io.to(`order:${pedido.id}`).emit('order.updated', { orderId: pedido.id, status: mapped })
-      } catch (e) {
-        console.warn('socket emit failed (APROVADO)', e?.message || e)
-      }
-  }
-
-  return { ok: true, mpStatus: data.status }
 }
 
 export const listAllOrders = async (filters = {}) => {
