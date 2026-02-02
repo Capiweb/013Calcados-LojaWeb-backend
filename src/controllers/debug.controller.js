@@ -9,7 +9,8 @@ export const paymentsByOrder = async (req, res) => {
     if (!MP_ACCESS_TOKEN) return res.status(500).json({ error: 'MP_ACCESS_TOKEN não configurado' })
 
     // search payments by external_reference
-  const url = `${MP_BASE}/payments/search?external_reference=${encodeURIComponent(orderId)}`
+  const url = `${MP_BASE}/v1/payments/search?external_reference=${encodeURIComponent(orderId)}`
+    console.log('debug.paymentsByOrder: fetching MP search url=', url)
     const r = await fetch(url, { headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` } })
     if (!r.ok) {
       const txt = await r.text()

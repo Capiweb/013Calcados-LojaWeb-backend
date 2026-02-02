@@ -163,38 +163,120 @@ export const linkPaymentToOrder = async (pedidoId, pagamentoData) => {
 export const handleMpNotification = async (body) => {
   // Exemplo de body com payment id -> buscar payment info no MP e atualizar status
   // Implementação simples: receber { id: payment_id }
-  const paymentId = body?.data?.id || body?.id || null
-  if (!paymentId) throw new Error('payment id not provided')
+  const incomingId = body?.data?.id || body?.id || null
+  if (!incomingId) throw new Error('payment id not provided')
 
-  // consultar MP para obter status
   if (!MP_ACCESS_TOKEN) {
-    const msg = `MP_ACCESS_TOKEN is not configured; cannot query payment ${paymentId}`
+    const msg = `MP_ACCESS_TOKEN is not configured; cannot query payment ${incomingId}`
     console.error(msg)
     throw new Error(msg)
   }
 
-  let res
-  try {
-    res = await fetch(`${MP_BASE}/payments/${paymentId}`, {
-      headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` }
-    })
-  } catch (err) {
-    console.error(`MP request network error for payment ${paymentId}:`, err?.message || err)
-    throw new Error('MP consulta failed')
-  }
-
-  if (!res.ok) {
-    let txt = ''
+  // Helper to process a payment by its id: fetch payment data and run existing logic
+  const processPaymentById = async (paymentIdToProcess) => {
+    // fetch payment
+    let r
     try {
-      txt = await res.text()
-    } catch (e) {
-      txt = '<failed to read response body>'
+      r = await fetch(`${MP_BASE}/v1/payments/${paymentIdToProcess}`, { headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` } })
+    } catch (err) {
+      console.error(`MP request network error for payment ${paymentIdToProcess}:`, err?.message || err)
+      throw new Error('MP consulta failed')
     }
-    console.error(`MP consulta returned error for payment ${paymentId}: status=${res.status} body=${txt} token=${maskToken(MP_ACCESS_TOKEN)}`)
-    throw new Error(`MP consulta failed: ${res.status} ${txt}`)
+    if (!r.ok) {
+      let txt = ''
+      try { txt = await r.text() } catch (e) { txt = '<failed to read response body>' }
+      console.error(`MP consulta returned error for payment ${paymentIdToProcess}: status=${r.status} body=${txt} token=${maskToken(MP_ACCESS_TOKEN)}`)
+      throw new Error(`MP consulta failed: ${r.status} ${txt}`)
+    }
+    const paymentData = await r.json()
+
+    // continue with existing mapping and DB logic using paymentData
+    const statusMap = {
+      approved: 'APROVADO',
+      pending: 'PENDENTE',
+      rejected: 'REJEITADO',
+      refunded: 'REEMBOLSADO'
+    }
+    const mpStatus = paymentData.status
+    const mapped = statusMap[mpStatus] || 'PENDENTE'
+
+    const pagamentoId = paymentIdToProcess
+
+    const existingByPagamentoId = await orderRepo.findPaymentByPagamentoId(pagamentoId)
+    const pedidoIdFromMp = paymentData.external_reference || paymentData.preference_id || null
+
+    if (existingByPagamentoId) {
+      await orderRepo.updatePaymentStatus(pagamentoId, mapped)
+      try {
+        const io = getIo()
+        const pedido = await orderRepo.getOrderByPaymentId(pagamentoId)
+        if (io && pedido) io.to(`order:${pedido.id}`).emit('order.updated', { orderId: pedido.id, status: mapped })
+      } catch (e) { console.warn('socket emit failed (existingByPagamentoId)', e?.message || e) }
+    } else if (pedidoIdFromMp) {
+      const existingByPedido = await orderRepo.findPaymentByPedidoId(pedidoIdFromMp)
+      if (existingByPedido) {
+        await orderRepo.updatePaymentId(existingByPedido.pagamentoId, pagamentoId)
+        await orderRepo.updatePaymentStatus(pagamentoId, mapped)
+        try { const io = getIo(); if (io && pedidoIdFromMp) io.to(`order:${pedidoIdFromMp}`).emit('order.updated', { orderId: pedidoIdFromMp, status: mapped }) } catch (e) { console.warn('socket emit failed (existingByPedido)', e?.message || e) }
+      } else {
+        await orderRepo.createPaymentForPedido(pedidoIdFromMp, pagamentoId, { provedor: 'mercado_pago', status: mapped })
+        try { const io = getIo(); if (io && pedidoIdFromMp) io.to(`order:${pedidoIdFromMp}`).emit('order.updated', { orderId: pedidoIdFromMp, status: mapped }) } catch (e) { console.warn('socket emit failed (createPaymentForPedido)', e?.message || e) }
+      }
+    } else {
+      await orderRepo.linkPayment(null, { provedor: 'mercado_pago', pagamentoId, status: mapped })
+    }
+
+    if (mapped === 'APROVADO') {
+      const pedido = await orderRepo.getOrderByPaymentId(pagamentoId)
+      if (pedido && pedido.itens) {
+        for (const it of pedido.itens) {
+          await productRepo.decrementStock(it.produtoVariacaoId, it.quantidade)
+        }
+      }
+      try { const io = getIo(); if (io && pedido) io.to(`order:${pedido.id}`).emit('order.updated', { orderId: pedido.id, status: mapped }) } catch (e) { console.warn('socket emit failed (APROVADO)', e?.message || e) }
+    }
+    return { ok: true, mpStatus: paymentData.status }
   }
 
-  const data = await res.json()
+  // First, try to treat incomingId as a payment id
+  try {
+    return await processPaymentById(incomingId)
+  } catch (err) {
+    // If payment endpoint returns 404 or similar, it may be a merchant_order id
+    const errMsg = String(err.message || '')
+    if (errMsg.includes('404') || errMsg.toLowerCase().includes('resource not found')) {
+      console.log(`handleMpNotification: payment ${incomingId} not found, trying merchant_orders/${incomingId}`)
+      // try merchant_orders
+      try {
+        const moRes = await fetch(`${MP_BASE}/v1/merchant_orders/${incomingId}`, { headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` } })
+        if (!moRes.ok) {
+          let txt = ''
+          try { txt = await moRes.text() } catch (e) { txt = '<failed to read response body>' }
+          console.error(`MP merchant_order lookup failed for ${incomingId}: status=${moRes.status} body=${txt}`)
+          throw new Error('MP consulta merchant_order failed')
+        }
+        const mo = await moRes.json()
+        // mo.payments is an array of payment objects with id
+        const payments = mo.payments || []
+        if (payments.length === 0) {
+          console.warn('merchant_order has no payments to process for id=', incomingId)
+          return { ok: true, note: 'merchant_order_no_payments' }
+        }
+        // Process each payment id sequentially
+        const results = []
+        for (const p of payments) {
+          if (p.id) {
+            try { const r = await processPaymentById(p.id); results.push(r) } catch (e) { console.error('processing payment from merchant_order failed', e?.message || e) }
+          }
+        }
+        return { ok: true, processed: results }
+      } catch (e) {
+        console.error('merchant_order fallback failed:', e?.message || e)
+        throw e
+      }
+    }
+    throw err
+  }
 
   // exemplo: data.status -> 'approved' ou 'pending' ou 'rejected'
   const statusMap = {
