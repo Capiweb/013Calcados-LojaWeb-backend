@@ -20,6 +20,14 @@ export const mpNotification = (req, res) => {
       return res.status(200).json({ ok: true, ignored: true })
     }
 
+    // If MP provides a topic or resource_type and it's not 'payment', skip calling payments GET.
+    const topic = body?.type || body?.topic || req.headers['x-mercadopago-topic'] || null
+    const resourceType = body?.resource_type || null
+    if (topic && topic !== 'payment' && resourceType && resourceType !== 'payment') {
+      console.log('mpNotification: received non-payment topic/resource_type, ignoring to avoid unnecessary MP GET', { topic, resourceType })
+      return res.status(200).json({ ok: true, ignored: true, reason: 'non_payment' })
+    }
+
     // Acknowledge receipt quickly, then process in background
     res.status(200).json({ ok: true, processing: true })
 

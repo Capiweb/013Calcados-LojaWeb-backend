@@ -11,7 +11,17 @@ export const createOrderItem = async (data) => {
 }
 
 export const linkPayment = async (pedidoId, pagamentoData) => {
-  return prisma.pagamento.create({ data: { ...pagamentoData, pedidoId } })
+  // Use upsert on pedidoId (which is unique) to avoid unique constraint errors when a placeholder
+  // payment already exists for the pedido. If pedidoId is null/undefined, fallback to create without pedidoId.
+  if (!pedidoId) {
+    // create without pedidoId (rare) - we'll create a record with pagamentoId if provided
+    return prisma.pagamento.create({ data: { ...pagamentoData } })
+  }
+  return prisma.pagamento.upsert({
+    where: { pedidoId },
+    update: { ...pagamentoData, pedidoId },
+    create: { ...pagamentoData, pedidoId }
+  })
 }
 
 export const getOrderById = async (id) => {

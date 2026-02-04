@@ -427,16 +427,56 @@ export const handleMpNotification = async (body) => {
     return { ok: true, mpStatus: paymentData.status }
   }
 
-  // First, try to treat incomingId as a payment id
+  // Decide how to interpret incomingId to avoid unnecessary MP GETs that return 404.
+  // Heuristic:
+  // - If incomingId contains a dash it's likely a pedido.external_reference (UUID) -> use payments search by external_reference
+  // - If incomingId is numeric, only call payments GET if we already have a pagamento record in our DB for that id
   try {
-    const resProcess = await processPaymentById(incomingId)
-    if (resProcess && resProcess.notFound) {
-      console.log(`handleMpNotification: payment ${incomingId} not found (payments GET returned 404). No further MP fallbacks will be attempted.`)
-      return { ok: true, note: 'payment_not_found' }
+    if (String(incomingId).includes('-')) {
+      // Treat as external_reference / pedidoId: search payments by external_reference
+      try {
+        const searchUrl = `${MP_BASE}/v1/payments/search?external_reference=${encodeURIComponent(incomingId)}`
+        console.log(`MP GET (search) ${searchUrl} Authorization: Bearer ${maskToken(MP_ACCESS_TOKEN)}`)
+        const sres = await fetch(searchUrl, { headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` } })
+        if (!sres.ok) {
+          const txt = await sres.text().catch(() => '<no-body>')
+          console.error(`MP search returned error for external_reference ${incomingId}: status=${sres.status} body=${txt}`)
+          return { ok: true, note: 'mp_search_failed' }
+        }
+        const sdata = await sres.json()
+        const payments = sdata.results || sdata || []
+        if (!payments || payments.length === 0) {
+          console.log(`handleMpNotification: no payments found for external_reference ${incomingId}`)
+          return { ok: true, note: 'no_payments_for_external_reference' }
+        }
+        const processed = []
+        for (const p of payments) {
+          if (p && p.id) {
+            try { processed.push(await processPaymentById(p.id)) } catch (e) { console.error('processing payment from search failed', e?.message || e) }
+          }
+        }
+        return { ok: true, processed }
+      } catch (e) {
+        console.error('handleMpNotification: payment search failed', e?.message || e)
+        return { ok: true, note: 'mp_search_exception' }
+      }
     }
-    return resProcess
+
+    // If numeric id: only attempt payments GET if we already have a pagamento for that MP id, to avoid 404s
+    const numericCheck = /^[0-9]+$/.test(String(incomingId))
+    if (numericCheck) {
+      const existing = await orderRepo.findPaymentByPagamentoId(String(incomingId))
+      if (!existing) {
+        console.log(`handleMpNotification: numeric incomingId ${incomingId} has no matching pagamento in DB; skipping MP payments GET to avoid 404`) 
+        return { ok: true, note: 'no_local_payment_record' }
+      }
+      // we have a local pagamento record -> process by id
+      return await processPaymentById(incomingId)
+    }
+
+    // Fallback: try to process as a payment id (best-effort)
+    return await processPaymentById(incomingId)
   } catch (err) {
-    // propagate unexpected errors
     throw err
   }
 }
