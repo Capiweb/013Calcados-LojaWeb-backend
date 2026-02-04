@@ -30,3 +30,6 @@ export function ensureAdmin(req, res, next) {
 }
 
 export default { ensureAuth, ensureAdmin }
+
+// Backwards compatibility: some modules import { authMiddleware }
+export const authMiddleware = ensureAuth
