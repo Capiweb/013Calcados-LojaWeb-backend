@@ -93,6 +93,18 @@ export const deleteOrdersByUserId = async (usuarioId) => {
   return res
 }
 
+export const deletePendingOrdersOlderThan = async (cutoffDate) => {
+  // cutoffDate should be an ISO string or Date
+  const pedidos = await prisma.pedido.findMany({ where: { status: 'PENDENTE', criadoEm: { lt: cutoffDate } }, select: { id: true } })
+  const ids = pedidos.map(p => p.id)
+  if (ids.length === 0) return { count: 0 }
+  // delete pagamentos, itens, then pedidos
+  await prisma.pagamento.deleteMany({ where: { pedidoId: { in: ids } } })
+  await prisma.pedidoItem.deleteMany({ where: { pedidoId: { in: ids } } })
+  const res = await prisma.pedido.deleteMany({ where: { id: { in: ids } } })
+  return res
+}
+
 export const addFreightToOrder = async (pedidoId, frete) => {
   const pedido = await prisma.pedido.findUnique({ where: { id: pedidoId } })
   if (!pedido) return null

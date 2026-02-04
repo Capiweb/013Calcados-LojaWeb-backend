@@ -220,3 +220,10 @@ export const decrementStock = async (produtoVariacaoId, amount) => {
     data: { estoque: { decrement: amount } }
   })
 }
+
+export const incrementStock = async (produtoVariacaoId, amount) => {
+  return prisma.produtoVariacao.updateMany({
+    where: { id: produtoVariacaoId },
+    data: { estoque: { increment: amount } }
+  })
+}

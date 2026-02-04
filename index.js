@@ -98,8 +98,11 @@ server.listen(PORT, () => {
 const CLEANUP_INTERVAL_MS = 1000 * 60 * 60 // every hour
 setInterval(async () => {
   try {
-    const res = await orderService.deletePendingPaymentsOlderThan(24)
-    if (res && res.count) console.log(`Cleanup: removed ${res.count} pending pagamentos older than 24h`)
+    const res = await orderService.deletePendingOrdersOlderThan(24)
+    if (res && (res.count || res)) {
+      const count = res.count || res
+      console.log(`Cleanup: removed ${count} pending pedidos older than 24h`)
+    }
   } catch (e) {
     console.error('Cleanup job error:', e)
   }

@@ -245,6 +245,34 @@ export const handleMpNotification = async (body) => {
 
     const pagamentoId = paymentIdToProcess
 
+    // helper: safely decrement stock for a pedido; if any item fails to decrement
+    // we rollback previous decrements and return { ok: false, reason }
+    const safeDecrementStockForPedido = async (pedido) => {
+      const decremented = []
+      try {
+        for (const it of (pedido.itens || [])) {
+          const res = await productRepo.decrementStock(it.produtoVariacaoId, it.quantidade)
+          // Prisma updateMany returns { count: n } in some contexts, or the raw result
+          const affected = res?.count ?? res
+          if (!affected || affected === 0) {
+            // rollback previous
+            for (const prev of decremented) {
+              try { await productRepo.incrementStock(prev.produtoVariacaoId, prev.quantidade) } catch (e) { console.error('rollback increment failed', e) }
+            }
+            return { ok: false, reason: `estoque insuficiente para variacao ${it.produtoVariacaoId}` }
+          }
+          decremented.push({ produtoVariacaoId: it.produtoVariacaoId, quantidade: it.quantidade })
+        }
+        return { ok: true }
+      } catch (e) {
+        // rollback on unexpected error
+        for (const prev of decremented) {
+          try { await productRepo.incrementStock(prev.produtoVariacaoId, prev.quantidade) } catch (err) { console.error('rollback increment failed', err) }
+        }
+        return { ok: false, reason: e?.message || e }
+      }
+    }
+
     const existingByPagamentoId = await orderRepo.findPaymentByPagamentoId(pagamentoId)
   // Prefer explicit linkers: external_reference, preference_id or merchant order id
   const pedidoIdFromMp = paymentData.external_reference || paymentData.preference_id || (paymentData.order && paymentData.order.id) || null
@@ -282,9 +310,24 @@ export const handleMpNotification = async (body) => {
         if (mapped === 'APROVADO') {
           try {
             const pedido = await orderRepo.getOrderByPaymentId(pagamentoId)
-            if (pedido && pedido.itens) {
-              for (const it of pedido.itens) {
-                await productRepo.decrementStock(it.produtoVariacaoId, it.quantidade)
+            // ensure we don't decrement twice: check if pedido already has an APROVADO pagamento
+            let shouldDecrement = true
+            try {
+              if (pedido && pedido.id) {
+                const existingPag = await orderRepo.findPaymentByPedidoId(pedido.id)
+                if (existingPag && existingPag.status === 'APROVADO') {
+                  shouldDecrement = false
+                  console.log(`reconciliation: skipping stock decrement for pedido ${pedido.id} because payment already APROVADO`)
+                }
+              }
+            } catch (e) { /* ignore check errors and proceed with decrement to be safe */ }
+            if (shouldDecrement && pedido && pedido.itens) {
+              const dres = await safeDecrementStockForPedido(pedido)
+              if (!dres.ok) {
+                console.error('reconciliation: safe decrement failed:', dres.reason)
+                // update payment status to REJEITADO or PENDENTE and notify
+                try { await orderRepo.updatePaymentStatus(pagamentoId, 'REJEITADO') } catch (e) { console.warn('failed to update payment status after decrement failure', e?.message || e) }
+                return { ok: false, mpStatus: paymentData.status, reason: dres.reason }
               }
             }
             // clear user's cart if we can
@@ -306,7 +349,21 @@ export const handleMpNotification = async (body) => {
         const io = getIo()
         const pedido = await orderRepo.getOrderByPaymentId(pagamentoId)
         if (mapped === 'APROVADO' && pedido) {
-          console.log(`processPaymentById: marking pedido ${pedido.id} as PAGO`) 
+          console.log(`processPaymentById: marking pedido ${pedido.id} as PAGO`)
+          // only decrement stock/create PAGO if previous pagamento status wasn't already APROVADO
+          const prevStatus = existingByPagamentoId?.status
+          if (prevStatus !== 'APROVADO') {
+            try {
+              const dres = await safeDecrementStockForPedido(pedido)
+              if (!dres.ok) {
+                console.error('processPaymentById: safe decrement failed:', dres.reason)
+                await orderRepo.updatePaymentStatus(pagamentoId, 'REJEITADO')
+                return { ok: false, mpStatus: paymentData.status, reason: dres.reason }
+              }
+            } catch (e) { console.warn('processPaymentById: decrement stock failed', e?.message || e) }
+          } else {
+            console.log(`processPaymentById: previous payment status was APROVADO for pagamentoId=${pagamentoId}, skipping decrement`)
+          }
           await orderRepo.updateOrderStatus(pedido.id, 'PAGO')
         }
         if (io && pedido) io.to(`order:${pedido.id}`).emit('order.updated', { orderId: pedido.id, status: mapped })
@@ -337,9 +394,23 @@ export const handleMpNotification = async (body) => {
 
     if (mapped === 'APROVADO') {
       const pedido = await orderRepo.getOrderByPaymentId(pagamentoId)
-      if (pedido && pedido.itens) {
-        for (const it of pedido.itens) {
-          await productRepo.decrementStock(it.produtoVariacaoId, it.quantidade)
+      // check if we already decremented stock for this pedido
+      let shouldDecrementFinal = true
+      try {
+        if (pedido && pedido.id) {
+          const existingPagFinal = await orderRepo.findPaymentByPedidoId(pedido.id)
+          if (existingPagFinal && existingPagFinal.status === 'APROVADO') {
+            shouldDecrementFinal = false
+            console.log(`processPaymentById: skipping final stock decrement for pedido ${pedido.id} because payment already APROVADO`)
+          }
+        }
+      } catch (e) { /* ignore check errors */ }
+      if (shouldDecrementFinal && pedido && pedido.itens) {
+        const dres = await safeDecrementStockForPedido(pedido)
+        if (!dres.ok) {
+          console.error('processPaymentById final: safe decrement failed:', dres.reason)
+          await orderRepo.updatePaymentStatus(pagamentoId, 'REJEITADO')
+          return { ok: false, mpStatus: paymentData.status, reason: dres.reason }
         }
       }
       if (pedido) {
@@ -449,4 +520,9 @@ export const getCartById = async (id) => {
 export const deletePendingPaymentsOlderThan = async (hours = 24) => {
   const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000)
   return orderRepo.deletePendingPaymentsOlderThan(cutoff.toISOString())
+}
+
+export const deletePendingOrdersOlderThan = async (hours = 24) => {
+  const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000)
+  return orderRepo.deletePendingOrdersOlderThan(cutoff.toISOString())
 }
