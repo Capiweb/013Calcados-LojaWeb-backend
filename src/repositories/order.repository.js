@@ -63,3 +63,60 @@ export const deletePendingPaymentsOlderThan = async (cutoffDate) => {
 export const updateOrderStatus = async (pedidoId, status) => {
   return prisma.pedido.update({ where: { id: pedidoId }, data: { status } })
 }
+
+export const findPendingOrderByUserId = async (usuarioId) => {
+  return prisma.pedido.findFirst({ where: { usuarioId, status: 'PENDENTE' }, include: { itens: true, pagamento: true } })
+}
+
+export const deleteOrderById = async (id) => {
+  // delete pagamento, itens and pedido in safe order
+  try {
+    await prisma.pagamento.deleteMany({ where: { pedidoId: id } })
+  } catch (e) {
+    // ignore if no payment
+  }
+  try {
+    await prisma.pedidoItem.deleteMany({ where: { pedidoId: id } })
+  } catch (e) {
+    // ignore
+  }
+  return prisma.pedido.delete({ where: { id } })
+}
+
+export const deleteOrdersByUserId = async (usuarioId) => {
+  const pedidos = await prisma.pedido.findMany({ where: { usuarioId }, select: { id: true } })
+  const ids = pedidos.map(p => p.id)
+  if (ids.length === 0) return { count: 0 }
+  await prisma.pagamento.deleteMany({ where: { pedidoId: { in: ids } } })
+  await prisma.pedidoItem.deleteMany({ where: { pedidoId: { in: ids } } })
+  const res = await prisma.pedido.deleteMany({ where: { id: { in: ids } } })
+  return res
+}
+
+export const addFreightToOrder = async (pedidoId, frete) => {
+  const pedido = await prisma.pedido.findUnique({ where: { id: pedidoId } })
+  if (!pedido) return null
+  const current = Number(pedido.total || 0)
+  const newTotal = (current + Number(frete || 0)).toFixed(2)
+  return prisma.pedido.update({ where: { id: pedidoId }, data: { total: newTotal } })
+}
+
+export const deleteOrderItemsByPedidoId = async (pedidoId) => {
+  return prisma.pedidoItem.deleteMany({ where: { pedidoId } })
+}
+
+export const updateOrderTotal = async (pedidoId, total) => {
+  return prisma.pedido.update({ where: { id: pedidoId }, data: { total } })
+}
+
+export const deletePaymentByPagamentoId = async (pagamentoId) => {
+  return prisma.pagamento.deleteMany({ where: { pagamentoId } })
+}
+
+export const deletePaymentsByUserId = async (usuarioId) => {
+  const pedidos = await prisma.pedido.findMany({ where: { usuarioId }, select: { id: true } })
+  const ids = pedidos.map(p => p.id)
+  if (ids.length === 0) return { count: 0 }
+  const res = await prisma.pagamento.deleteMany({ where: { pedidoId: { in: ids } } })
+  return res
+}

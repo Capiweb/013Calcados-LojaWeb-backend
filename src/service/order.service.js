@@ -30,6 +30,39 @@ export const createOrderFromCart = async (userId, endereco) => {
   const cart = await cartRepo.getCartWithItems(userId)
   if (!cart || !cart.itens || cart.itens.length === 0) throw new Error('Carrinho vazio')
 
+  // If a pending order already exists for this user, reuse it instead of creating a new one
+  const existingPending = await orderRepo.findPendingOrderByUserId(userId)
+  if (existingPending) {
+    // ensure items reflect current cart: remove old items and recreate from cart to keep totals in sync
+    // For simplicity we'll delete existing items and recreate
+    try {
+      await Promise.all((existingPending.itens || []).map(it => orderRepo.pedidoItem && orderRepo.pedidoItem))
+    } catch (e) {
+      // ignore; not critical
+    }
+    // Recalculate total and update items
+    let total = 0
+    const itensData = cart.itens.map((item) => {
+      const preco = Number(item.produtoVariacao.produto.preco)
+      total += preco * item.quantidade
+      return {
+        produtoVariacaoId: item.produtoVariacaoId,
+        quantidade: item.quantidade,
+        preco: preco,
+      }
+    })
+    // remove existing items
+    try { await orderRepo.deleteOrderItemsByPedidoId(existingPending.id) } catch (e) { /* noop */ }
+    for (const it of itensData) {
+      await orderRepo.createOrderItem({ pedidoId: existingPending.id, produtoVariacaoId: it.produtoVariacaoId, quantidade: it.quantidade, preco: it.preco })
+    }
+    // update total and shipping if needed
+    try { await orderRepo.updateOrderStatus(existingPending.id, existingPending.status) } catch (e) { /* noop */ }
+    await orderRepo.updateOrderTotal(existingPending.id, total)
+    const full = await orderRepo.getOrderById(existingPending.id)
+    return full
+  }
+
   // calcular total
   let total = 0
   const itensData = cart.itens.map((item) => {
@@ -364,6 +397,41 @@ export const listAllOrders = async (filters = {}) => {
 
 export const getOrderById = async (id) => {
   return orderRepo.getOrderById(id)
+}
+
+export const deleteOrder = async (pedidoId, requestingUserId, isAdmin = false) => {
+  const pedido = await orderRepo.getOrderById(pedidoId)
+  if (!pedido) throw new Error('Pedido não encontrado')
+  if (!isAdmin && pedido.usuarioId !== requestingUserId) throw new Error('Não autorizado')
+  return orderRepo.deleteOrderById(pedidoId)
+}
+
+export const deleteAllOrdersForUser = async (usuarioId, requestingUserId, isAdmin = false) => {
+  if (!isAdmin && usuarioId !== requestingUserId) throw new Error('Não autorizado')
+  return orderRepo.deleteOrdersByUserId(usuarioId)
+}
+
+export const addFreightToOrder = async (pedidoId, frete, requestingUserId, isAdmin = false) => {
+  const pedido = await orderRepo.getOrderById(pedidoId)
+  if (!pedido) throw new Error('Pedido não encontrado')
+  if (!isAdmin && pedido.usuarioId !== requestingUserId) throw new Error('Não autorizado')
+  const updated = await orderRepo.addFreightToOrder(pedidoId, frete)
+  return updated
+}
+
+export const deletePayment = async (pagamentoId, requestingUserId, isAdmin = false) => {
+  const pagamento = await orderRepo.findPaymentByPagamentoId(pagamentoId)
+  if (!pagamento) throw new Error('Pagamento não encontrado')
+  // fetch associated order to check ownership
+  const pedido = await orderRepo.getOrderById(pagamento.pedidoId)
+  if (!pedido) throw new Error('Pedido relacionado não encontrado')
+  if (!isAdmin && pedido.usuarioId !== requestingUserId) throw new Error('Não autorizado')
+  return orderRepo.deletePaymentByPagamentoId(pagamentoId)
+}
+
+export const deleteAllPaymentsForUser = async (usuarioId, requestingUserId, isAdmin = false) => {
+  if (!isAdmin && usuarioId !== requestingUserId) throw new Error('Não autorizado')
+  return orderRepo.deletePaymentsByUserId(usuarioId)
 }
 
 export const listAllCarts = async () => {

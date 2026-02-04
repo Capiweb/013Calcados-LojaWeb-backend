@@ -162,4 +162,19 @@ router.get('/admin', authMiddleware, adminMiddleware, orderController.getAllOrde
 router.get('/carts', authMiddleware, adminMiddleware, orderController.getAllCarts)
 router.get('/carts/:id', authMiddleware, adminMiddleware, orderController.getCartById)
 
+// Delete a single order (user can delete their own; admin can delete any)
+router.delete('/:id', authMiddleware, orderController.deleteOrder)
+
+// Delete all orders for a given user (admin or the user themself)
+router.delete('/user/:userId', authMiddleware, orderController.deleteAllUserOrders)
+
+// Add freight (frete) to an existing order (PUT /api/orders/:id/freight)
+router.put('/:id/freight', authMiddleware, orderController.putAddFreight)
+
+// Payments: delete a single payment by pagamentoId
+router.delete('/payments/:pagamentoId', authMiddleware, orderController.deletePayment)
+
+// Payments: delete all payments for a user (admin or the user themself)
+router.delete('/payments/user/:userId', authMiddleware, orderController.deleteAllPaymentsForUser)
+
 export default router

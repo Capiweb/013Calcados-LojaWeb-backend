@@ -257,3 +257,78 @@ export const getCartById = async (req, res) => {
     return res.status(500).json({ error: 'Erro ao obter carrinho' })
   }
 }
+
+export const deleteOrder = async (req, res) => {
+  try {
+    const { id } = req.params
+    const userId = req.userId
+    const isAdmin = req.user?.isAdmin || false
+    await orderService.deleteOrder(id, userId, isAdmin)
+    return res.status(200).json({ ok: true })
+  } catch (error) {
+    console.error('deleteOrder error:', error)
+    if (String(error.message).includes('Não autorizado')) return res.status(403).json({ error: 'Não autorizado' })
+    if (String(error.message).includes('Pedido não encontrado')) return res.status(404).json({ error: 'Pedido não encontrado' })
+    return res.status(500).json({ error: 'Erro ao deletar pedido' })
+  }
+}
+
+export const deleteAllUserOrders = async (req, res) => {
+  try {
+    const { userId } = req.params
+    const requestingUser = req.userId
+    const isAdmin = req.user?.isAdmin || false
+    const result = await orderService.deleteAllOrdersForUser(userId, requestingUser, isAdmin)
+    return res.status(200).json({ ok: true, deleted: result.count || result })
+  } catch (error) {
+    console.error('deleteAllUserOrders error:', error)
+    if (String(error.message).includes('Não autorizado')) return res.status(403).json({ error: 'Não autorizado' })
+    return res.status(500).json({ error: 'Erro ao deletar pedidos do usuário' })
+  }
+}
+
+export const putAddFreight = async (req, res) => {
+  try {
+    const { id } = req.params
+    const { frete } = req.body
+    if (frete == null) return res.status(400).json({ error: 'frete required' })
+    const userId = req.userId
+    const isAdmin = req.user?.isAdmin || false
+    const updated = await orderService.addFreightToOrder(id, frete, userId, isAdmin)
+    return res.status(200).json(updated)
+  } catch (error) {
+    console.error('putAddFreight error:', error)
+    if (String(error.message).includes('Não autorizado')) return res.status(403).json({ error: 'Não autorizado' })
+    if (String(error.message).includes('Pedido não encontrado')) return res.status(404).json({ error: 'Pedido não encontrado' })
+    return res.status(500).json({ error: 'Erro ao atualizar frete' })
+  }
+}
+
+export const deletePayment = async (req, res) => {
+  try {
+    const { pagamentoId } = req.params
+    const userId = req.userId
+    const isAdmin = req.user?.isAdmin || false
+    await orderService.deletePayment(pagamentoId, userId, isAdmin)
+    return res.status(200).json({ ok: true })
+  } catch (error) {
+    console.error('deletePayment error:', error)
+    if (String(error.message).includes('Não autorizado')) return res.status(403).json({ error: 'Não autorizado' })
+    if (String(error.message).includes('Pagamento não encontrado') || String(error.message).includes('Pedido relacionado não encontrado')) return res.status(404).json({ error: 'Pagamento não encontrado' })
+    return res.status(500).json({ error: 'Erro ao deletar pagamento' })
+  }
+}
+
+export const deleteAllPaymentsForUser = async (req, res) => {
+  try {
+    const { userId } = req.params
+    const requestingUser = req.userId
+    const isAdmin = req.user?.isAdmin || false
+    const result = await orderService.deleteAllPaymentsForUser(userId, requestingUser, isAdmin)
+    return res.status(200).json({ ok: true, deleted: result.count || result })
+  } catch (error) {
+    console.error('deleteAllPaymentsForUser error:', error)
+    if (String(error.message).includes('Não autorizado')) return res.status(403).json({ error: 'Não autorizado' })
+    return res.status(500).json({ error: 'Erro ao deletar pagamentos do usuário' })
+  }
+}
