@@ -389,7 +389,10 @@ export const handleMpNotification = async (body) => {
         }
       }
     } else {
-      await orderRepo.linkPayment(null, { provedor: 'mercado_pago', pagamentoId, status: mapped })
+      // No pedido id returned by MP and no existing payment found. We avoid creating an orphan pagamento
+      // without a pedidoId because the Pagamento model enforces pedidoId @unique and application code
+      // expects pagamentos to be tied to pedidos. Log and return.
+      console.warn(`processPaymentById: payment ${pagamentoId} has no associated pedido (external_reference/preference_id/order.id); skipping creation of orphan pagamento`) 
     }
 
     if (mapped === 'APROVADO') {
@@ -428,35 +431,8 @@ export const handleMpNotification = async (body) => {
   try {
     const resProcess = await processPaymentById(incomingId)
     if (resProcess && resProcess.notFound) {
-      console.log(`handleMpNotification: payment ${incomingId} not found (payments GET returned 404). Trying merchant_orders lookup as a fallback.`)
-      // Try merchant_orders lookup: sometimes MP notifies with merchant_order id
-      try {
-        const moUrl = `${MP_BASE}/v1/merchant_orders/${incomingId}`
-        console.log(`MP GET ${moUrl} Authorization: Bearer ${maskToken(MP_ACCESS_TOKEN)}`)
-        const moRes = await fetch(moUrl, { headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` } })
-        if (!moRes.ok) {
-          let txt = ''
-          try { txt = await moRes.text() } catch (e) { txt = '<failed to read response body>' }
-          console.error(`MP merchant_order lookup failed for ${incomingId}: status=${moRes.status} body=${txt}`)
-          return { ok: true, note: 'payment_not_found' }
-        }
-        const mo = await moRes.json()
-        const payments = mo.payments || []
-        if (payments.length === 0) {
-          console.warn('merchant_order has no payments to process for id=', incomingId)
-          return { ok: true, note: 'merchant_order_no_payments' }
-        }
-        const results = []
-        for (const p of payments) {
-          if (p.id) {
-            try { const r = await processPaymentById(p.id); results.push(r) } catch (e) { console.error('processing payment from merchant_order failed', e?.message || e) }
-          }
-        }
-        return { ok: true, processed: results }
-      } catch (e) {
-        console.error('merchant_order fallback failed:', e?.message || e)
-        return { ok: true, note: 'merchant_order_failed' }
-      }
+      console.log(`handleMpNotification: payment ${incomingId} not found (payments GET returned 404). No further MP fallbacks will be attempted.`)
+      return { ok: true, note: 'payment_not_found' }
     }
     return resProcess
   } catch (err) {

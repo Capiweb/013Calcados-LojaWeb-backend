@@ -40,7 +40,13 @@ export const updatePaymentId = async (oldPagamentoId, newPagamentoId) => {
 }
 
 export const createPaymentForPedido = async (pedidoId, pagamentoId, pagamentoData = {}) => {
-  return prisma.pagamento.create({ data: { ...pagamentoData, pedidoId, pagamentoId } })
+  // Use upsert to avoid unique constraint errors when a pagamento for the pedido already exists.
+  // The model has pedidoId marked as @@unique, so upsert by pedidoId is safe.
+  return prisma.pagamento.upsert({
+    where: { pedidoId },
+    update: { pagamentoId, ...pagamentoData },
+    create: { ...pagamentoData, pedidoId, pagamentoId }
+  })
 }
 
 export const findAllOrders = async ({ where = {}, orderBy = { criadoEm: 'desc' }, include = { itens: true, pagamento: true, usuario: true } } = {}) => {
