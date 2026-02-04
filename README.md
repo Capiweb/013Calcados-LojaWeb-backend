@@ -285,7 +285,35 @@ Exemplo de criação de variação com cores:
 - POST /api/orders/cart/items — adicionar/atualizar item (produtoVariacaoId, quantidade)
 - DELETE /api/orders/cart/items/:id — remover item
 - POST /api/orders/checkout — cria pedido a partir do carrinho e gera preference do Mercado Pago (retorna `init_point`)
+ - POST /api/orders/checkout — cria pedido a partir do carrinho e gera preference do Mercado Pago (retorna `init_point`)
+   - Observação nova: o backend agora reaproveita um pedido com status `PENDENTE` para o mesmo usuário. Ou seja, se o usuário gerar a preferência do Mercado Pago mais de uma vez sem pagar, o mesmo pedido será utilizado (itens e total são sincronizados com o carrinho), evitando múltiplos pedidos duplicados.
  - GET /api/orders/admin — lista todos os pedidos (apenas ADMIN). Query params opcionais: `status` (ex: PENDENTE, APROVADO), `userId` (uuid)
+
+Novos endpoints relacionados a pedidos e pagamentos
+
+- DELETE /api/orders/{id}
+  - Deleta um pedido por id. Usuário só pode deletar seus próprios pedidos; ADMIN pode deletar qualquer pedido.
+  - Retorno: 200 { ok: true } ou 403/404 conforme o caso.
+
+- DELETE /api/orders/user/{userId}
+  - Deleta todos os pedidos pertencentes a um usuário. Pode ser executado pelo próprio usuário ou por ADMIN.
+  - Retorno: 200 { ok: true, deleted: <count> }.
+
+- PUT /api/orders/{id}/freight
+  - Body: { "frete": number }
+  - Soma o valor do frete ao `total` do pedido. Apenas o dono do pedido ou ADMIN podem executar.
+  - Retorno: pedido atualizado (com novo total).
+
+- DELETE /api/orders/payments/{pagamentoId}
+  - Deleta um registro de pagamento pelo campo `pagamentoId` salvo no DB (id retornado pelo provedor, ex: Mercado Pago). Somente dono do pedido ou ADMIN.
+
+- DELETE /api/orders/payments/user/{userId}
+  - Deleta todos os registros de pagamento associados aos pedidos de um usuário (ADMIN ou o próprio usuário podem executar).
+
+Notas de uso e segurança
+- As rotas novas exigem autenticação (JWT). O `authMiddleware` valida token via cookie `token` ou header Authorization.
+- As remoções são permanentes no banco (Prisma `deleteMany` / `delete`). Se você preferir soft-delete, posso ajustar o schema e a lógica para marcar registros como `deletedAt` em vez de remover.
+- Ao adicionar frete via PUT, o valor é somado ao campo `total`. Se preferir, podemos adicionar um campo `frete` separado em `Pedido` (recomendado) e expor o `subtotal` + `frete` como `total` calculado.
 
 ### Favoritos
 

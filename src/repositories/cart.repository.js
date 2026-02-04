@@ -64,15 +64,22 @@ export const getCartWithItems = async (usuarioId) => {
 export const addOrUpdateCartItem = async (usuarioId, produtoVariacaoId, quantidade) => {
   const cart = await getOrCreateCartByUser(usuarioId)
 
-  const existing = await prisma.carrinhoItem.findFirst({
-    where: { carrinhoId: cart.id, produtoVariacaoId }
-  })
+  // verify quantity is positive
+  const qty = Number(quantidade || 0)
+  if (qty <= 0) throw new Error('Quantidade inválida')
+
+  // check stock availability on produtoVariacao
+  const variacao = await prisma.produtoVariacao.findUnique({ where: { id: produtoVariacaoId } })
+  if (!variacao) throw new Error('Variação de produto não encontrada')
+  if (Number(variacao.estoque || 0) < qty) throw new Error('Estoque insuficiente')
+
+  const existing = await prisma.carrinhoItem.findFirst({ where: { carrinhoId: cart.id, produtoVariacaoId } })
 
   if (existing) {
-    return prisma.carrinhoItem.update({ where: { id: existing.id }, data: { quantidade } })
+    return prisma.carrinhoItem.update({ where: { id: existing.id }, data: { quantidade: qty } })
   }
 
-  return prisma.carrinhoItem.create({ data: { carrinhoId: cart.id, produtoVariacaoId, quantidade } })
+  return prisma.carrinhoItem.create({ data: { carrinhoId: cart.id, produtoVariacaoId, quantidade: qty } })
 }
 
 export const removeCartItem = async (id) => {

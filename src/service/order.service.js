@@ -287,6 +287,8 @@ export const handleMpNotification = async (body) => {
                 await productRepo.decrementStock(it.produtoVariacaoId, it.quantidade)
               }
             }
+            // clear user's cart if we can
+            try { if (pedido && pedido.usuarioId) await cartRepo.clearCart(pedido.usuarioId) } catch (e) { /* ignore */ }
           } catch (e) { console.warn('reconciliation: decrement stock failed', e?.message || e) }
         }
 
@@ -345,6 +347,8 @@ export const handleMpNotification = async (body) => {
         await orderRepo.updateOrderStatus(pedido.id, 'PAGO')
       }
       try { const io = getIo(); if (io && pedido) io.to(`order:${pedido.id}`).emit('order.updated', { orderId: pedido.id, status: mapped }) } catch (e) { console.warn('socket emit failed (APROVADO)', e?.message || e) }
+      // clear user's cart after successful stock decrement
+      try { if (pedido && pedido.usuarioId) await cartRepo.clearCart(pedido.usuarioId) } catch (e) { console.warn('clearCart failed', e?.message || e) }
     }
     return { ok: true, mpStatus: paymentData.status }
   }

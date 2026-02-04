@@ -163,18 +163,144 @@ router.get('/carts', authMiddleware, adminMiddleware, orderController.getAllCart
 router.get('/carts/:id', authMiddleware, adminMiddleware, orderController.getCartById)
 
 // Delete a single order (user can delete their own; admin can delete any)
+/**
+ * @swagger
+ * /api/orders/{id}:
+ *   delete:
+ *     summary: Deletar um pedido
+ *     description: Deleta um pedido por id. Usuário só pode apagar seus próprios pedidos, ADMIN pode apagar qualquer.
+ *     tags:
+ *       - Pedidos
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID do pedido
+ *     responses:
+ *       200:
+ *         description: Pedido deletado com sucesso
+ *       403:
+ *         description: Não autorizado
+ *       404:
+ *         description: Pedido não encontrado
+ */
 router.delete('/:id', authMiddleware, orderController.deleteOrder)
 
-// Delete all orders for a given user (admin or the user themself)
+/**
+ * @swagger
+ * /api/orders/user/{userId}:
+ *   delete:
+ *     summary: Deletar todos os pedidos de um usuário
+ *     description: Deleta todos os pedidos pertencentes a um usuário. O próprio usuário ou ADMIN podem executar.
+ *     tags:
+ *       - Pedidos
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID do usuário
+ *     responses:
+ *       200:
+ *         description: Pedidos deletados (count retornado)
+ *       403:
+ *         description: Não autorizado
+ */
 router.delete('/user/:userId', authMiddleware, orderController.deleteAllUserOrders)
 
-// Add freight (frete) to an existing order (PUT /api/orders/:id/freight)
+/**
+ * @swagger
+ * /api/orders/{id}/freight:
+ *   put:
+ *     summary: Adicionar valor de frete ao pedido
+ *     description: Soma o valor do frete ao total do pedido. Somente o dono do pedido ou ADMIN podem atualizar.
+ *     tags:
+ *       - Pedidos
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID do pedido
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               frete:
+ *                 type: number
+ *     responses:
+ *       200:
+ *         description: Pedido atualizado com novo total
+ *       400:
+ *         description: frete required
+ *       403:
+ *         description: Não autorizado
+ */
 router.put('/:id/freight', authMiddleware, orderController.putAddFreight)
 
-// Payments: delete a single payment by pagamentoId
+/**
+ * @swagger
+ * /api/orders/payments/{pagamentoId}:
+ *   delete:
+ *     summary: Deletar um pagamento
+ *     description: Deleta um pagamento (registro) por `pagamentoId` (id do provedor). Somente dono do pedido ou ADMIN.
+ *     tags:
+ *       - Pagamentos
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: pagamentoId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID do pagamento (pagamentoId salvo no DB)
+ *     responses:
+ *       200:
+ *         description: Pagamento deletado com sucesso
+ *       403:
+ *         description: Não autorizado
+ *       404:
+ *         description: Pagamento não encontrado
+ */
 router.delete('/payments/:pagamentoId', authMiddleware, orderController.deletePayment)
 
-// Payments: delete all payments for a user (admin or the user themself)
+/**
+ * @swagger
+ * /api/orders/payments/user/{userId}:
+ *   delete:
+ *     summary: Deletar todos os pagamentos de um usuário
+ *     description: Deleta todos os registros de pagamento associados aos pedidos de um usuário. ADMIN ou o próprio usuário podem executar.
+ *     tags:
+ *       - Pagamentos
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID do usuário
+ *     responses:
+ *       200:
+ *         description: Pagamentos deletados
+ *       403:
+ *         description: Não autorizado
+ */
 router.delete('/payments/user/:userId', authMiddleware, orderController.deleteAllPaymentsForUser)
 
 export default router
