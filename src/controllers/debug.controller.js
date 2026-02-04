@@ -10,7 +10,7 @@ export const paymentsByOrder = async (req, res) => {
 
     // search payments by external_reference
   const url = `${MP_BASE}/v1/payments/search?external_reference=${encodeURIComponent(orderId)}`
-    console.log('debug.paymentsByOrder: fetching MP search url=', url)
+  console.log(`DEBUG: consultando Mercado Pago (payments/search) para pedido ${orderId}: ${url}`)
     const r = await fetch(url, { headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` } })
     if (!r.ok) {
       const txt = await r.text()
@@ -34,8 +34,8 @@ export const inspectNotification = async (req, res) => {
 
     // Try payments
     try {
-      const pUrl = `${MP_BASE}/v1/payments/${id}`
-      console.log(`DEBUG MP GET ${pUrl} Authorization: Bearer ${maskToken(MP_ACCESS_TOKEN)}`)
+  const pUrl = `${MP_BASE}/v1/payments/${id}`
+  console.log(`DEBUG: consultando Mercado Pago GET /v1/payments/${id} — token: ${maskToken(MP_ACCESS_TOKEN)}`)
       const r = await fetch(pUrl, { headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` } })
       results.payment = { status: r.status }
       try { results.payment.body = await r.json() } catch (e) { results.payment.body = await r.text().catch(() => '<no-body>') }

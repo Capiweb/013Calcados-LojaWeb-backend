@@ -215,7 +215,7 @@ export const handleMpNotification = async (body) => {
     let r
     try {
       const paymentUrl = `${MP_BASE}/v1/payments/${paymentIdToProcess}`
-      console.log(`MP GET ${paymentUrl} Authorization: Bearer ${maskToken(MP_ACCESS_TOKEN)}`)
+  console.log(`MP: solicitando pagamento (GET) ${paymentUrl} — token: ${maskToken(MP_ACCESS_TOKEN)}`)
       r = await fetch(paymentUrl, { headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` } })
     } catch (err) {
       console.error(`MP request network error for payment ${paymentIdToProcess}:`, err?.message || err)
@@ -436,7 +436,7 @@ export const handleMpNotification = async (body) => {
       // Treat as external_reference / pedidoId: search payments by external_reference
       try {
         const searchUrl = `${MP_BASE}/v1/payments/search?external_reference=${encodeURIComponent(incomingId)}`
-        console.log(`MP GET (search) ${searchUrl} Authorization: Bearer ${maskToken(MP_ACCESS_TOKEN)}`)
+  console.log(`MP: buscando pagamentos por external_reference (search) ${searchUrl} — token: ${maskToken(MP_ACCESS_TOKEN)}`)
         const sres = await fetch(searchUrl, { headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` } })
         if (!sres.ok) {
           const txt = await sres.text().catch(() => '<no-body>')
@@ -462,19 +462,16 @@ export const handleMpNotification = async (body) => {
       }
     }
 
-    // If numeric id: only attempt payments GET if we already have a pagamento for that MP id, to avoid 404s
+    // If numeric id (MP payment id or order id) -> try to process as a payment id directly
+    // NOTE: o MP pode enviar tanto o payment.id quanto um order.id; aqui tentamos primeiro
+    // consultar /v1/payments/{id} porque essa rota é a fonte de verdade para o status do pagamento.
     const numericCheck = /^[0-9]+$/.test(String(incomingId))
     if (numericCheck) {
-      const existing = await orderRepo.findPaymentByPagamentoId(String(incomingId))
-      if (!existing) {
-        console.log(`handleMpNotification: numeric incomingId ${incomingId} has no matching pagamento in DB; skipping MP payments GET to avoid 404`) 
-        return { ok: true, note: 'no_local_payment_record' }
-      }
-      // we have a local pagamento record -> process by id
+      console.log(`handleMpNotification: id numérico recebido (${incomingId}) — consultando MP /v1/payments/${incomingId}`)
       return await processPaymentById(incomingId)
     }
 
-    // Fallback: try to process as a payment id (best-effort)
+    // Fallback para outros formatos: tentar processar como pagamento
     return await processPaymentById(incomingId)
   } catch (err) {
     throw err
