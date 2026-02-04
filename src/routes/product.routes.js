@@ -125,6 +125,6 @@ router.get('/variacoes/todas', variacaoController.getAllVariacoes)
  *           type: string
  *           format: uuid
  */
-router.get('/variacoes/:id', variacaoController.getVariacaoById)
+router.get('/variacoes/:id', variacaoController.getVariacao)
 
 export default router

@@ -22,3 +22,7 @@ export const getVariacaoById = async (id) => {
     }
   })
 }
+
+export const updateVariacaoEstoque = async (produtoVariacaoId, novoEstoque) => {
+  return prisma.produtoVariacao.update({ where: { id: produtoVariacaoId }, data: { estoque: Number(novoEstoque) } })
+}

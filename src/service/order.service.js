@@ -280,68 +280,66 @@ export const handleMpNotification = async (body) => {
     // Reconciliation: if MP returned a pedido identifier (external_reference / preference_id / order.id)
     // ensure the DB has a pagamento record linked to that pedido with the correct pagamentoId and status.
     if (pedidoIdFromMp) {
-          try {
-          const existingByPedidoRecon = await orderRepo.findPaymentByPedidoId(pedidoIdFromMp)
-          if (existingByPedidoRecon) {
-            if (existingByPedidoRecon.pagamentoId !== pagamentoId) {
-              console.log(`reconciliation: updating pagamentoId for pedido ${pedidoIdFromMp}: ${existingByPedidoRecon.pagamentoId} -> ${pagamentoId}`)
-              await orderRepo.updatePaymentId(existingByPedidoRecon.pagamentoId, pagamentoId)
-            } else {
-              console.log(`reconciliation: pagamento already matches for pedido ${pedidoIdFromMp} -> ${pagamentoId}`)
-            }
+      try {
+        const existingByPedidoRecon = await orderRepo.findPaymentByPedidoId(pedidoIdFromMp)
+        // capture previous status before we update/create records so we can decide whether to decrement
+        const previousPagamentoStatus = existingByPedidoRecon?.status || null
+        if (existingByPedidoRecon) {
+          if (existingByPedidoRecon.pagamentoId !== pagamentoId) {
+            console.log(`reconciliation: updating pagamentoId for pedido ${pedidoIdFromMp}: ${existingByPedidoRecon.pagamentoId} -> ${pagamentoId}`)
+            await orderRepo.updatePaymentId(existingByPedidoRecon.pagamentoId, pagamentoId)
           } else {
-            console.log(`reconciliation: creating pagamento for pedido ${pedidoIdFromMp} pagamentoId=${pagamentoId} status=${mapped}`)
-            await orderRepo.createPaymentForPedido(pedidoIdFromMp, pagamentoId, { provedor: 'mercado_pago', status: mapped })
+            console.log(`reconciliation: pagamento already matches for pedido ${pedidoIdFromMp} -> ${pagamentoId}`)
           }
-
-          // If approved, attempt to decrement stock first and only mark payment/order as approved after success
-          if (mapped === 'APROVADO') {
-            try {
-              const pedido = await orderRepo.getOrderById(pedidoIdFromMp)
-              // ensure we don't decrement twice: check if there's already an APROVADO pagamento for this pedido
-              let shouldDecrement = true
-              try {
-                const existingPag = await orderRepo.findPaymentByPedidoId(pedido.id)
-                if (existingPag && existingPag.status === 'APROVADO') {
-                  shouldDecrement = false
-                  console.log(`reconciliation: skipping stock decrement for pedido ${pedido.id} because payment already APROVADO`)
-                }
-              } catch (e) { /* ignore check errors and proceed */ }
-
-              if (shouldDecrement && pedido && pedido.itens) {
-                const dres = await safeDecrementStockForPedido(pedido)
-                if (!dres.ok) {
-                  console.error('reconciliation: safe decrement failed:', dres.reason)
-                  // mark payment as REJEITADO so it doesn't appear approved without stock
-                  try { await orderRepo.updatePaymentStatus(pagamentoId, 'REJEITADO') } catch (e) { console.warn('failed to update payment status after decrement failure', e?.message || e) }
-                  return { ok: false, mpStatus: paymentData.status, reason: dres.reason }
-                }
-              }
-
-              // only after successful decrement mark payment and pedido as approved
-              try { await orderRepo.updatePaymentStatus(pagamentoId, 'APROVADO') } catch (e) { console.warn('reconciliation: updatePaymentStatus failed', e?.message || e) }
-              try { await orderRepo.updateOrderStatus(pedidoIdFromMp, 'PAGO') } catch (e) { console.warn('reconciliation: updateOrderStatus failed', e?.message || e) }
-              // clear user's cart if we can
-              try { if (pedido && pedido.usuarioId) await cartRepo.clearCart(pedido.usuarioId) } catch (e) { /* ignore */ }
-            } catch (e) {
-              console.error('reconciliation: decrement stock failed', e?.message || e)
-              // if decrement failed unexpectedly, mark payment as REJEITADO
-              try { await orderRepo.updatePaymentStatus(pagamentoId, 'REJEITADO') } catch (er) { console.warn('failed to update payment status after decrement exception', er?.message || er) }
-              return { ok: false, mpStatus: paymentData.status, reason: e?.message || e }
-            }
-          } else {
-            // For non-approved statuses, just update the payment status in DB
-            try { await orderRepo.updatePaymentStatus(pagamentoId, mapped) } catch (e) { console.warn('reconciliation: updatePaymentStatus failed', e?.message || e) }
-          }
-
-          // emit socket event
-          try { const io = getIo(); if (io) io.to(`order:${pedidoIdFromMp}`).emit('order.updated', { orderId: pedidoIdFromMp, status: mapped }) } catch (e) { console.warn('socket emit failed (reconciliation)', e?.message || e) }
-
-          return { ok: true, mpStatus: paymentData.status, reconciled: true, pedidoId: pedidoIdFromMp }
-        } catch (e) {
-          console.error('reconciliation failed:', e?.message || e)
-          // continue with existing flow if reconciliation failed
+        } else {
+          console.log(`reconciliation: creating pagamento for pedido ${pedidoIdFromMp} pagamentoId=${pagamentoId} status=${mapped}`)
+          await orderRepo.createPaymentForPedido(pedidoIdFromMp, pagamentoId, { provedor: 'mercado_pago', status: mapped })
         }
+
+        // Update payment status (idempotent)
+        await orderRepo.updatePaymentStatus(pagamentoId, mapped)
+
+        // If approved, mark order as PAGO
+        if (mapped === 'APROVADO') {
+          console.log(`reconciliation: marking pedido ${pedidoIdFromMp} as PAGO`)
+          try { await orderRepo.updateOrderStatus(pedidoIdFromMp, 'PAGO') } catch (e) { console.warn('reconciliation: updateOrderStatus failed', e?.message || e) }
+        }
+
+        // emit socket event
+        try { const io = getIo(); if (io) io.to(`order:${pedidoIdFromMp}`).emit('order.updated', { orderId: pedidoIdFromMp, status: mapped }) } catch (e) { console.warn('socket emit failed (reconciliation)', e?.message || e) }
+
+        // decrement stock if approved
+        if (mapped === 'APROVADO') {
+          try {
+            const pedido = await orderRepo.getOrderByPaymentId(pagamentoId)
+            // Decide whether to decrement based on previous pagamento status (prior to our updates).
+            // If previousPagamentoStatus was already 'APROVADO', skip. Otherwise, proceed.
+            let shouldDecrement = true
+            try {
+              if (previousPagamentoStatus === 'APROVADO') {
+                shouldDecrement = false
+                console.log(`reconciliation: skipping stock decrement for pedido ${pedidoIdFromMp} because previous payment status was APROVADO`)
+              }
+            } catch (e) { /* ignore and proceed */ }
+            if (shouldDecrement && pedido && pedido.itens) {
+              const dres = await safeDecrementStockForPedido(pedido)
+              if (!dres.ok) {
+                console.error('reconciliation: safe decrement failed:', dres.reason)
+                // update payment status to REJEITADO or PENDENTE and notify
+                try { await orderRepo.updatePaymentStatus(pagamentoId, 'REJEITADO') } catch (e) { console.warn('failed to update payment status after decrement failure', e?.message || e) }
+                return { ok: false, mpStatus: paymentData.status, reason: dres.reason }
+              }
+            }
+            // clear user's cart if we can
+            try { if (pedido && pedido.usuarioId) await cartRepo.clearCart(pedido.usuarioId) } catch (e) { /* ignore */ }
+          } catch (e) { console.warn('reconciliation: decrement stock failed', e?.message || e) }
+        }
+
+        return { ok: true, mpStatus: paymentData.status, reconciled: true, pedidoId: pedidoIdFromMp }
+      } catch (e) {
+        console.error('reconciliation failed:', e?.message || e)
+        // continue with existing flow if reconciliation failed
+      }
     }
 
     if (existingByPagamentoId) {

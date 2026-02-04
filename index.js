@@ -14,7 +14,7 @@ import feedbackRoutes from './src/routes/feedback.routes.js'
 import debugRoutes from './src/routes/debug.routes.js'
 import favoriteRoutes from './src/routes/favorite.routes.js'
 import enderecoRoutes from './src/routes/endereco.routes.js'
-import adminRoutes from './src/routes/admin.routes.js'
+import variacaoRoutes from './src/routes/variacao.routes.js'
 import * as orderService from './src/service/order.service.js'
 import { initIo } from './src/utils/io.js'
 import http from 'http'
@@ -74,11 +74,11 @@ app.use('/api/feedback', feedbackRoutes)
 // Rotas de endereços
 app.use('/api/enderecos', enderecoRoutes)
 
+// Rotas de variações (estoque)
+app.use('/api/variacoes', variacaoRoutes)
+
 // Webhooks
 app.use('/webhooks', webhookRoutes)
-
-// Admin routes
-app.use('/api/admin', adminRoutes)
 
 // Debug / util
 app.use('/debug', debugRoutes)

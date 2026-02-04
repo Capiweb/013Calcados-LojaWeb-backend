@@ -227,12 +227,3 @@ export const incrementStock = async (produtoVariacaoId, amount) => {
     data: { estoque: { increment: amount } }
   })
 }
-
-export const setStock = async (produtoVariacaoId, newStock) => {
-  try {
-    const n = Number(newStock)
-    return prisma.produtoVariacao.update({ where: { id: produtoVariacaoId }, data: { estoque: n } })
-  } catch (e) {
-    return null
-  }
-}
