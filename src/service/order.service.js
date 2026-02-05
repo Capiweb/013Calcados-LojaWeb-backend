@@ -15,7 +15,22 @@ const maskToken = (t = '') => {
 }
 
 export const getCart = async (userId) => {
-  return cartRepo.getCartWithItems(userId)
+  const cart = await cartRepo.getCartWithItems(userId)
+  if (!cart) return cart
+  // calcular total do carrinho (unit_price * quantidade)
+  let total = 0
+  try {
+    for (const it of (cart.itens || [])) {
+      const unit = Number(it.preco ?? it.produtoVariacao?.produto?.preco ?? 0)
+      const qty = Number(it.quantidade || 0)
+      total += unit * qty
+    }
+  } catch (e) {
+    // se algo falhar no cálculo, não quebremos a resposta — apenas log e retornar sem total
+    console.warn('getCart: falha ao calcular total do carrinho', e?.message || e)
+  }
+  // retornar total com duas casas
+  return { ...cart, total: Number(total.toFixed(2)) }
 }
 
 export const addItemToCart = async (userId, produtoVariacaoId, quantidade) => {
