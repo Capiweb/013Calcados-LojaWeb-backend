@@ -45,6 +45,9 @@ export const createOrderFromCart = async (userId, endereco, frete = 0) => {
   const cart = await cartRepo.getCartWithItems(userId)
   if (!cart || !cart.itens || cart.itens.length === 0) throw new Error('Carrinho vazio')
 
+  // normalize frete value for use in both create and reuse flows
+  const freteValue = Number(frete || 0)
+
   // If a pending order already exists for this user, reuse it instead of creating a new one
   const existingPending = await orderRepo.findPendingOrderByUserId(userId)
   if (existingPending) {
@@ -80,9 +83,15 @@ export const createOrderFromCart = async (userId, endereco, frete = 0) => {
         }
         // update total and shipping if needed
         try { await orderRepo.updateOrderStatus(existingPending.id, existingPending.status) } catch (e) { /* noop */ }
-        await orderRepo.updateOrderTotal(existingPending.id, total)
+        // include frete when updating total
+        try {
+          await orderRepo.updateOrderTotal(existingPending.id, Number((total + freteValue).toFixed(2)))
+        } catch (e) {
+          console.warn('createOrderFromCart: falha ao atualizar total com frete para pedido pendente', e?.message || e)
+        }
         const full = await orderRepo.getOrderById(existingPending.id)
-        return full
+        // attach frete to returned object so controller will include it in MP preference
+        return { ...full, frete: freteValue }
       }
     } catch (err) {
       console.warn('createOrderFromCart: falha ao validar pedido pendente existente, continuando para criar novo pedido', err?.message || err)
@@ -103,7 +112,6 @@ export const createOrderFromCart = async (userId, endereco, frete = 0) => {
   })
 
   // add frete to total (frete opcional passado pelo checkout)
-  const freteValue = Number(frete || 0)
   if (freteValue && !isNaN(freteValue)) {
     total += freteValue
   }
