@@ -215,41 +215,8 @@ router.delete('/:id', authMiddleware, orderController.deleteOrder)
  */
 router.delete('/user/:userId', authMiddleware, orderController.deleteAllUserOrders)
 
-/**
- * @swagger
- * /api/orders/{id}/freight:
- *   put:
- *     summary: Adicionar valor de frete ao pedido
- *     description: Soma o valor do frete ao total do pedido. Somente o dono do pedido ou ADMIN podem atualizar.
- *     tags:
- *       - Pedidos
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: ID do pedido
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               frete:
- *                 type: number
- *     responses:
- *       200:
- *         description: Pedido atualizado com novo total
- *       400:
- *         description: frete required
- *       403:
- *         description: Não autorizado
- */
-router.put('/:id/freight', authMiddleware, orderController.putAddFreight)
+// Observação: endpoint PUT /api/orders/{id}/freight foi removido. O valor do frete deve ser enviado
+// no corpo da requisição POST /api/orders/checkout como { "frete": number }.
 
 /**
  * @swagger

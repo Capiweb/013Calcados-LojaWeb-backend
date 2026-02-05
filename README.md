@@ -299,10 +299,7 @@ Novos endpoints relacionados a pedidos e pagamentos
   - Deleta todos os pedidos pertencentes a um usuário. Pode ser executado pelo próprio usuário ou por ADMIN.
   - Retorno: 200 { ok: true, deleted: <count> }.
 
-- PUT /api/orders/{id}/freight
-  - Body: { "frete": number }
-  - Soma o valor do frete ao `total` do pedido. Apenas o dono do pedido ou ADMIN podem executar.
-  - Retorno: pedido atualizado (com novo total).
+Note: A rota PUT /api/orders/{id}/freight foi removida. Agora, ao criar o checkout você deve enviar o valor do frete no body do POST /api/orders/checkout como `{ "frete": number }`. O backend irá somar o frete ao total do pedido na criação.
 
 - DELETE /api/orders/payments/{pagamentoId}
   - Deleta um registro de pagamento pelo campo `pagamentoId` salvo no DB (id retornado pelo provedor, ex: Mercado Pago). Somente dono do pedido ou ADMIN.

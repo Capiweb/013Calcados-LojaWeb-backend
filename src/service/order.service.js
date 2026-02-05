@@ -26,44 +26,56 @@ export const removeItemFromCart = async (itemId) => {
   return cartRepo.removeCartItem(itemId)
 }
 
-export const createOrderFromCart = async (userId, endereco) => {
+export const createOrderFromCart = async (userId, endereco, frete = 0) => {
   const cart = await cartRepo.getCartWithItems(userId)
   if (!cart || !cart.itens || cart.itens.length === 0) throw new Error('Carrinho vazio')
 
   // If a pending order already exists for this user, reuse it instead of creating a new one
   const existingPending = await orderRepo.findPendingOrderByUserId(userId)
   if (existingPending) {
-    // ensure items reflect current cart: remove old items and recreate from cart to keep totals in sync
-    // For simplicity we'll delete existing items and recreate
+    // Re-fetch the pedido to ensure its status didn't change concurrently (e.g., payment processed)
     try {
-      await Promise.all((existingPending.itens || []).map(it => orderRepo.pedidoItem && orderRepo.pedidoItem))
-    } catch (e) {
-      // ignore; not critical
-    }
-    // Recalculate total and update items
-    let total = 0
-    const itensData = cart.itens.map((item) => {
-      const preco = Number(item.produtoVariacao.produto.preco)
-      total += preco * item.quantidade
-      return {
-        produtoVariacaoId: item.produtoVariacaoId,
-        quantidade: item.quantidade,
-        preco: preco,
+      const fresh = await orderRepo.getOrderById(existingPending.id)
+      if (!fresh || fresh.status !== 'PENDENTE') {
+        console.log(`createOrderFromCart: pedido ${existingPending.id} já não está mais PENDENTE (status=${fresh?.status}). Não será reusado; criando novo pedido.`)
+      } else {
+        console.log(`createOrderFromCart: reusando pedido PENDENTE existente ${existingPending.id} para o usuário ${userId}`)
+        // ensure items reflect current cart: remove old items and recreate from cart to keep totals in sync
+        // For simplicity we'll delete existing items and recreate
+        try {
+          await Promise.all((existingPending.itens || []).map(it => orderRepo.pedidoItem && orderRepo.pedidoItem))
+        } catch (e) {
+          // ignore; not critical
+        }
+        // Recalculate total and update items
+        let total = 0
+        const itensData = cart.itens.map((item) => {
+          const preco = Number(item.produtoVariacao.produto.preco)
+          total += preco * item.quantidade
+          return {
+            produtoVariacaoId: item.produtoVariacaoId,
+            quantidade: item.quantidade,
+            preco: preco,
+          }
+        })
+        // remove existing items
+        try { await orderRepo.deleteOrderItemsByPedidoId(existingPending.id) } catch (e) { /* noop */ }
+        for (const it of itensData) {
+          await orderRepo.createOrderItem({ pedidoId: existingPending.id, produtoVariacaoId: it.produtoVariacaoId, quantidade: it.quantidade, preco: it.preco })
+        }
+        // update total and shipping if needed
+        try { await orderRepo.updateOrderStatus(existingPending.id, existingPending.status) } catch (e) { /* noop */ }
+        await orderRepo.updateOrderTotal(existingPending.id, total)
+        const full = await orderRepo.getOrderById(existingPending.id)
+        return full
       }
-    })
-    // remove existing items
-    try { await orderRepo.deleteOrderItemsByPedidoId(existingPending.id) } catch (e) { /* noop */ }
-    for (const it of itensData) {
-      await orderRepo.createOrderItem({ pedidoId: existingPending.id, produtoVariacaoId: it.produtoVariacaoId, quantidade: it.quantidade, preco: it.preco })
+    } catch (err) {
+      console.warn('createOrderFromCart: falha ao validar pedido pendente existente, continuando para criar novo pedido', err?.message || err)
+      // fallthrough to create new pedido
     }
-    // update total and shipping if needed
-    try { await orderRepo.updateOrderStatus(existingPending.id, existingPending.status) } catch (e) { /* noop */ }
-    await orderRepo.updateOrderTotal(existingPending.id, total)
-    const full = await orderRepo.getOrderById(existingPending.id)
-    return full
   }
 
-  // calcular total
+  // calcular total (subtotal dos items)
   let total = 0
   const itensData = cart.itens.map((item) => {
     const preco = Number(item.produtoVariacao.produto.preco)
@@ -74,6 +86,12 @@ export const createOrderFromCart = async (userId, endereco) => {
       preco: preco,
     }
   })
+
+  // add frete to total (frete opcional passado pelo checkout)
+  const freteValue = Number(frete || 0)
+  if (freteValue && !isNaN(freteValue)) {
+    total += freteValue
+  }
 
   // criar pedido
   const pedido = await orderRepo.createOrder({
@@ -100,7 +118,8 @@ export const createOrderFromCart = async (userId, endereco) => {
 
   // return pedido with itens included for downstream use
   const fullPedido = await orderRepo.getOrderById(pedido.id)
-  return fullPedido
+  // attach frete to returned object for controller to use when creating MP preference
+  return { ...fullPedido, frete: freteValue }
 }
 
 
@@ -499,13 +518,8 @@ export const deleteAllOrdersForUser = async (usuarioId, requestingUserId, isAdmi
   return orderRepo.deleteOrdersByUserId(usuarioId)
 }
 
-export const addFreightToOrder = async (pedidoId, frete, requestingUserId, isAdmin = false) => {
-  const pedido = await orderRepo.getOrderById(pedidoId)
-  if (!pedido) throw new Error('Pedido não encontrado')
-  if (!isAdmin && pedido.usuarioId !== requestingUserId) throw new Error('Não autorizado')
-  const updated = await orderRepo.addFreightToOrder(pedidoId, frete)
-  return updated
-}
+// Nota: a lógica de adicionar frete via PUT foi removida. O frete agora deve ser enviado
+// no body do endpoint POST /api/orders/checkout e será somado ao total na criação do pedido.
 
 export const deletePayment = async (pagamentoId, requestingUserId, isAdmin = false) => {
   const pagamento = await orderRepo.findPaymentByPagamentoId(pagamentoId)

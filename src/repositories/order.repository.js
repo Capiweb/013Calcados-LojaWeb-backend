@@ -121,13 +121,6 @@ export const deletePendingOrdersOlderThan = async (cutoffDate) => {
   return res
 }
 
-export const addFreightToOrder = async (pedidoId, frete) => {
-  const pedido = await prisma.pedido.findUnique({ where: { id: pedidoId } })
-  if (!pedido) return null
-  const current = Number(pedido.total || 0)
-  const newTotal = (current + Number(frete || 0)).toFixed(2)
-  return prisma.pedido.update({ where: { id: pedidoId }, data: { total: newTotal } })
-}
 
 export const deleteOrderItemsByPedidoId = async (pedidoId) => {
   return prisma.pedidoItem.deleteMany({ where: { pedidoId } })

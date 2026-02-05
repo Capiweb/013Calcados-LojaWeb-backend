@@ -98,9 +98,11 @@ export const checkout = async (req, res) => {
     }
 
     // Create pedido in DB from cart (freeze address) before creating preference
+    // Accept optional frete in body and forward to service
+    const frete = req.body?.frete == null ? undefined : Number(req.body.frete)
     let pedido
     try {
-      pedido = await orderService.createOrderFromCart(userId, endereco || {})
+      pedido = await orderService.createOrderFromCart(userId, endereco || {}, frete)
     } catch (e) {
       console.error('Erro ao criar pedido:', e)
       return res.status(500).json({ error: 'Erro ao criar pedido' })
@@ -116,14 +118,28 @@ export const checkout = async (req, res) => {
       console.error('Erro ao criar registro de pagamento PENDENTE:', e)
     }
 
+    // If pedido contains frete, add a separate item representing shipping so Mercado Pago shows total correctly
     const mpBody = {
-      items,
+      items: [...items],
       external_reference: pedido.id || cart.id || undefined,
       back_urls: {
         success: process.env.MP_BACK_URL_SUCCESS || 'https://seusite.com/success',
         failure: process.env.MP_BACK_URL_FAILURE || 'https://seusite.com/failure',
         pending: process.env.MP_BACK_URL_PENDING || 'https://seusite.com/pending'
       }
+    }
+
+    if (pedido && Number(pedido.frete || 0) > 0) {
+      try {
+        mpBody.items.push({
+          id: 'FRETE',
+          title: 'Frete',
+          description: 'Custo de envio',
+          quantity: 1,
+          unit_price: Number(pedido.frete),
+          currency_id: 'BRL'
+        })
+      } catch (e) { /* ignore */ }
     }
 
     // Attach payer info from user profile when available
@@ -287,22 +303,7 @@ export const deleteAllUserOrders = async (req, res) => {
   }
 }
 
-export const putAddFreight = async (req, res) => {
-  try {
-    const { id } = req.params
-    const { frete } = req.body
-    if (frete == null) return res.status(400).json({ error: 'frete required' })
-    const userId = req.userId
-    const isAdmin = req.user?.isAdmin || false
-    const updated = await orderService.addFreightToOrder(id, frete, userId, isAdmin)
-    return res.status(200).json(updated)
-  } catch (error) {
-    console.error('putAddFreight error:', error)
-    if (String(error.message).includes('Não autorizado')) return res.status(403).json({ error: 'Não autorizado' })
-    if (String(error.message).includes('Pedido não encontrado')) return res.status(404).json({ error: 'Pedido não encontrado' })
-    return res.status(500).json({ error: 'Erro ao atualizar frete' })
-  }
-}
+// Nota: o endpoint de adicionar frete via PUT foi removido. Use POST /api/orders/checkout com { frete } no body.
 
 export const deletePayment = async (req, res) => {
   try {
