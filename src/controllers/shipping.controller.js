@@ -23,10 +23,11 @@ export const authorize = async (req, res) => {
   try {
     const clientId = process.env.MELHOR_ENVIO_CLIENT_ID
     const authorizeUrl = process.env.MELHOR_ENVIO_OAUTH_AUTHORIZE_URL || 'https://api.melhorenvio.com/oauth/authorize'
-    const redirectUri = process.env.MELHOR_ENVIO_OAUTH_REDIRECT_URI
+    const redirectUri = process.env.MELHOR_ENVIO_OAUTH_REDIRECT_URI || `${req.protocol}://${req.get('host')}/api/shipping/callback`
     if (!clientId) return res.status(500).json({ error: 'MELHOR_ENVIO_CLIENT_ID not configured' })
-    if (!redirectUri) return res.status(500).json({ error: 'MELHOR_ENVIO_OAUTH_REDIRECT_URI not configured' })
 
+    // If REDIRECT_URI is not configured in env, we derive it from the current request host.
+    // Note: the redirect URI must match what's set in the Melhor Envio app settings.
     const params = new URLSearchParams({ response_type: 'code', client_id: clientId, redirect_uri: redirectUri })
     // optional: add state if you want to track the user across redirects
     const url = `${authorizeUrl}?${params.toString()}`
@@ -42,7 +43,7 @@ export const callback = async (req, res) => {
     // Melhor Envio will redirect back with ?code=...
     const code = req.query.code
     if (!code) return res.status(400).json({ error: 'code query param required' })
-    const redirectUri = process.env.MELHOR_ENVIO_OAUTH_REDIRECT_URI
+    const redirectUri = process.env.MELHOR_ENVIO_OAUTH_REDIRECT_URI || `${req.protocol}://${req.get('host')}/api/shipping/callback`
     const tokenObj = await shippingService.exchangeAuthCode(code, redirectUri)
 
     // associate token with the authenticated user (req.userId)
@@ -52,7 +53,8 @@ export const callback = async (req, res) => {
     }
 
     // respond with a friendly message or redirect to frontend
-    return res.status(200).json({ ok: true, token: { access_token: tokenObj.access_token, expires_in: tokenObj.expires_in }, userId })
+    // If userId is not present (no cookie/session), return token so developer can persist it manually.
+    return res.status(200).json({ ok: true, token: { access_token: tokenObj.access_token, expires_in: tokenObj.expires_in, refresh_token: tokenObj.refresh_token }, userId })
   } catch (error) {
     console.error('shipping.callback error:', error?.message || error)
     const status = error?.status || 500
