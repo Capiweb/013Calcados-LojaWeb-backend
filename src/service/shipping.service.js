@@ -65,6 +65,34 @@ export const calculateShipping = async (payload, userId = null) => {
 
   const url = MELHOR_ENVIO_CALCULATE_URL
   try {
+    // Melhor Envio expects different shapes depending on endpoint.
+    // If caller provided origin_postal_code/destination_postal_code use from/to shape required by /v2/me/shipment/calculate
+    let bodyToSend = payload
+    try {
+      if (payload && (payload.origin_postal_code || payload.destination_postal_code)) {
+        const fromPostal = payload.origin_postal_code || payload.from?.postal_code || payload.from_postal_code
+        const toPostal = payload.destination_postal_code || payload.to?.postal_code || payload.to_postal_code
+        const items = Array.isArray(payload.items) ? payload.items.map(i => ({
+          weight: i.weight,
+          length: i.length,
+          height: i.height,
+          width: i.width,
+          quantity: i.quantity || 1,
+          insurance_value: i.insurance_value || i.insuranceValue || 0
+        })) : []
+
+        bodyToSend = {
+          from: { postal_code: String(fromPostal || '') },
+          to: { postal_code: String(toPostal || '') },
+          items
+        }
+        if (payload.services) bodyToSend.services = payload.services
+        if (payload.delivery_type) bodyToSend.delivery_type = payload.delivery_type
+      }
+    } catch (mapError) {
+      console.warn('shipping.calculateShipping mapping warning:', mapError?.message || mapError)
+    }
+
     const res = await fetch(url, {
       method: 'POST',
       headers: {
@@ -73,7 +101,7 @@ export const calculateShipping = async (payload, userId = null) => {
         Accept: 'application/json',
         'User-Agent': '013calcados (contato@seusite.com)'
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(bodyToSend)
     })
 
     const text = await res.text()
