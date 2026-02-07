@@ -111,6 +111,33 @@ Abaixo estão as rotas principais com explicação dos parâmetros (query/path/b
 
 1) Autenticação
 - POST /api/auth/register
+## Frete (Melhor Envio)
+
+Uma nova rota foi adicionada para cálculo de frete usando a API da Melhor Envio.
+
+- Endpoint: POST /api/shipping/calculate
+  - Requer autenticação (Bearer JWT).
+  - Body (exemplo mínimo):
+
+```json
+{
+  "origin_postal_code": "01000-000",
+  "destination_postal_code": "02000-000",
+  "items": [
+    { "weight": 1000, "length": 20, "height": 10, "width": 15, "quantity": 1 }
+  ]
+}
+```
+
+Variáveis de ambiente (adicionar no seu `.env`):
+
+- `MELHOR_ENVIO_TOKEN` - token de autenticação (Bearer) fornecido pela Melhor Envio.
+- `MELHOR_ENVIO_CALCULATE_URL` - URL do endpoint de cálculo de frete (opcional). Padrão: `https://api.melhorenvio.com.br/v2/shipment/calculate`.
+
+Notas importantes:
+- O backend apenas repassa o payload para a API da Melhor Envio e retorna a resposta. Garanta que o formato do body atenda à especificação da Melhor Envio (principalmente `items` com peso em gramas e dimensões em cm).
+- Se sua conta usar um endpoint diferente ou sandbox, configure `MELHOR_ENVIO_CALCULATE_URL` adequadamente.
+
   - Body (JSON): { nome, email, senha, confirmarSenha }
   - Regras: senha mínimo 6 caracteres; senha e confirmarSenha devem bater.
   - Respostas:
