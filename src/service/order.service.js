@@ -3,6 +3,7 @@ import * as orderRepo from '../repositories/order.repository.js'
 import fetch from 'node-fetch'
 import * as productRepo from '../repositories/product.repository.js'
 import { getIo } from '../utils/io.js'
+import * as shippingService from './shipping.service.js'
 
 const MP_ACCESS_TOKEN = process.env.MP_ACCESS_TOKEN
 const MP_BASE = 'https://api.mercadopago.com'
@@ -407,6 +408,8 @@ export const handleMpNotification = async (body) => {
             console.log(`processPaymentById: previous payment status was APROVADO for pagamentoId=${pagamentoId}, skipping decrement`)
           }
           await orderRepo.updateOrderStatus(pedido.id, 'PAGO')
+          // start shipment/job in background
+          try { setImmediate(() => startShipmentPurchaseJob(pedido.id)) } catch (e) { console.warn('failed to start shipment job', e?.message || e) }
         }
         if (io && pedido) io.to(`order:${pedido.id}`).emit('order.updated', { orderId: pedido.id, status: mapped })
       } catch (e) { console.warn('socket emit failed (existingByPagamentoId)', e?.message || e) }
@@ -420,6 +423,7 @@ export const handleMpNotification = async (body) => {
         if (mapped === 'APROVADO') {
           console.log(`processPaymentById: marking pedido ${pedidoIdFromMp} as PAGO`) 
           await orderRepo.updateOrderStatus(pedidoIdFromMp, 'PAGO')
+          try { setImmediate(() => startShipmentPurchaseJob(pedidoIdFromMp)) } catch (e) { console.warn('failed to start shipment job', e?.message || e) }
         }
       } else {
         console.log(`processPaymentById: creating new pagamento for pedido ${pedidoIdFromMp} pagamentoId=${pagamentoId} status=${mapped}`)
@@ -428,6 +432,7 @@ export const handleMpNotification = async (body) => {
         if (mapped === 'APROVADO') {
           console.log(`processPaymentById: marking pedido ${pedidoIdFromMp} as PAGO (new pagamento)`) 
           await orderRepo.updateOrderStatus(pedidoIdFromMp, 'PAGO')
+          try { setImmediate(() => startShipmentPurchaseJob(pedidoIdFromMp)) } catch (e) { console.warn('failed to start shipment job', e?.message || e) }
         }
       }
     } else {
@@ -460,13 +465,62 @@ export const handleMpNotification = async (body) => {
       }
       if (pedido) {
         console.log(`processPaymentById: ensuring pedido ${pedido.id} marked as PAGO (APROVADO)`) 
-        await orderRepo.updateOrderStatus(pedido.id, 'PAGO')
+          await orderRepo.updateOrderStatus(pedido.id, 'PAGO')
+          try { setImmediate(() => startShipmentPurchaseJob(pedido.id)) } catch (e) { console.warn('failed to start shipment job', e?.message || e) }
       }
       try { const io = getIo(); if (io && pedido) io.to(`order:${pedido.id}`).emit('order.updated', { orderId: pedido.id, status: mapped }) } catch (e) { console.warn('socket emit failed (APROVADO)', e?.message || e) }
       // clear user's cart after successful stock decrement
       try { if (pedido && pedido.usuarioId) await cartRepo.clearCart(pedido.usuarioId) } catch (e) { console.warn('clearCart failed', e?.message || e) }
     }
     return { ok: true, mpStatus: paymentData.status }
+  }
+
+  // Background: start shipment creation and purchase for orders marked as PAGO
+  const startShipmentPurchaseJob = async (pedidoId, attempt = 0) => {
+    const MAX_ATTEMPTS = 3
+    try {
+      const pedido = await orderRepo.getOrderById(pedidoId)
+      if (!pedido) throw new Error('Pedido não encontrado')
+      if (pedido.melhorenvio_shipment_id) {
+        // already created
+      } else {
+        // build shipment payload from pedido
+        const products = (pedido.itens || []).map(it => ({
+          weight: Number(it.preco) > 0 ? 1 : 1, // placeholder weight; ideally store real weight per product
+          length: 20,
+          height: 10,
+          width: 15,
+          quantity: it.quantidade,
+          insurance_value: Number(it.preco || 0)
+        }))
+        const shipmentPayload = {
+          from: { postal_code: process.env.MELHOR_ENVIO_ORIGIN_POSTAL_CODE || '01000000' },
+          to: { postal_code: String(pedido.cep || '').replace(/\D/g, '') },
+          products
+        }
+        const createRes = await shippingService.createShipment(shipmentPayload)
+        await orderRepo.updateOrderShippingInfo(pedidoId, { melhorenvio_shipment_id: createRes.id || createRes.shipment_id, shipping_metadata: createRes })
+      }
+
+      // purchase
+      const shipmentId = pedido.melhorenvio_shipment_id || (await orderRepo.getOrderById(pedidoId)).melhorenvio_shipment_id
+      if (shipmentId) {
+        const purchaseRes = await shippingService.purchaseShipment(shipmentId, {})
+        const purchaseId = purchaseRes.id || purchaseRes.purchase_id || purchaseRes.result?.id
+        const tracking = purchaseRes.tracking_number || purchaseRes.result?.tracking || null
+        const label = purchaseRes.label_url || purchaseRes.result?.label_url || purchaseRes.result?.label || null
+        await orderRepo.updateOrderShippingInfo(pedidoId, { melhorenvio_purchase_id: purchaseId, tracking_number: tracking, label_url: label, shipping_status: 'PURCHASED', shipping_metadata: { ...(purchaseRes || {}) } })
+      }
+    } catch (err) {
+      console.error('startShipmentPurchaseJob error:', err?.message || err)
+      if (attempt < 3) {
+        const backoff = Math.pow(2, attempt) * 1000
+        setTimeout(() => startShipmentPurchaseJob(pedidoId, attempt + 1), backoff)
+      } else {
+        // persist failure metadata
+        try { await orderRepo.updateOrderShippingInfo(pedidoId, { shipping_status: 'FAILED', shipping_metadata: { error: String(err?.message || err) } }) } catch (e) { /* ignore */ }
+      }
+    }
   }
 
   // Decide how to interpret incomingId to avoid unnecessary MP GETs that return 404.

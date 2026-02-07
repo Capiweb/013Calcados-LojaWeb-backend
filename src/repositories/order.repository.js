@@ -80,6 +80,11 @@ export const updateOrderStatus = async (pedidoId, status) => {
   return prisma.pedido.update({ where: { id: pedidoId }, data: { status } })
 }
 
+export const updateOrderShippingInfo = async (pedidoId, shippingData = {}) => {
+  // shippingData can include: melhorenvio_shipment_id, melhorenvio_purchase_id, tracking_number, label_url, shipping_status, shipping_metadata
+  return prisma.pedido.update({ where: { id: pedidoId }, data: { ...shippingData } })
+}
+
 export const findPendingOrderByUserId = async (usuarioId) => {
   return prisma.pedido.findFirst({ where: { usuarioId, status: 'PENDENTE' }, include: { itens: true, pagamento: true } })
 }

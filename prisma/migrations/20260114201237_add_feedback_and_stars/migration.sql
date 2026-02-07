@@ -23,19 +23,39 @@ CREATE TABLE "Feedback" (
 -- );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Feedback_usuarioId_produtoId_key" ON "Feedback"("usuarioId", "produtoId");
+CREATE UNIQUE INDEX IF NOT EXISTS "Feedback_usuarioId_produtoId_key" ON "Feedback"("usuarioId", "produtoId");
 
 -- CreateIndex
-CREATE INDEX "_ProdutoToUsuario_B_index" ON "_ProdutoToUsuario"("B");
+CREATE INDEX IF NOT EXISTS "_ProdutoToUsuario_B_index" ON "_ProdutoToUsuario"("B");
 
 -- AddForeignKey
-ALTER TABLE "Feedback" ADD CONSTRAINT "Feedback_usuarioId_fkey" FOREIGN KEY ("usuarioId") REFERENCES "Usuario"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'Feedback_usuarioId_fkey') THEN
+        ALTER TABLE "Feedback" ADD CONSTRAINT "Feedback_usuarioId_fkey" FOREIGN KEY ("usuarioId") REFERENCES "Usuario"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+    END IF;
+END$$;
 
 -- AddForeignKey
-ALTER TABLE "Feedback" ADD CONSTRAINT "Feedback_produtoId_fkey" FOREIGN KEY ("produtoId") REFERENCES "Produto"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'Feedback_produtoId_fkey') THEN
+        ALTER TABLE "Feedback" ADD CONSTRAINT "Feedback_produtoId_fkey" FOREIGN KEY ("produtoId") REFERENCES "Produto"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+    END IF;
+END$$;
 
 -- AddForeignKey
-ALTER TABLE "_ProdutoToUsuario" ADD CONSTRAINT "_ProdutoToUsuario_A_fkey" FOREIGN KEY ("A") REFERENCES "Produto"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '_ProdutoToUsuario_A_fkey') THEN
+        ALTER TABLE "_ProdutoToUsuario" ADD CONSTRAINT "_ProdutoToUsuario_A_fkey" FOREIGN KEY ("A") REFERENCES "Produto"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
+END$$;
 
 -- AddForeignKey
-ALTER TABLE "_ProdutoToUsuario" ADD CONSTRAINT "_ProdutoToUsuario_B_fkey" FOREIGN KEY ("B") REFERENCES "Usuario"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '_ProdutoToUsuario_B_fkey') THEN
+        ALTER TABLE "_ProdutoToUsuario" ADD CONSTRAINT "_ProdutoToUsuario_B_fkey" FOREIGN KEY ("B") REFERENCES "Usuario"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
+END$$;

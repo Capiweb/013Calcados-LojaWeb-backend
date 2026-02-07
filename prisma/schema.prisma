@@ -225,6 +225,14 @@ model Pedido {
   itens     PedidoItem[]
   pagamento Pagamento?
 
+  // Melhor Envio integration fields
+  melhorenvio_shipment_id String?
+  melhorenvio_purchase_id String?
+  tracking_number         String?
+  label_url               String?
+  shipping_status         String?
+  shipping_metadata       Json?
+
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 }
