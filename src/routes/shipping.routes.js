@@ -43,4 +43,16 @@ const router = express.Router()
  */
 router.post('/calculate', authMiddleware, shippingController.calculate)
 
+/**
+ * Initiate OAuth authorization with Melhor Envio (redirect to provider)
+ * GET /api/shipping/authorize
+ */
+router.get('/authorize', authMiddleware, shippingController.authorize)
+
+/**
+ * OAuth callback endpoint (configured as redirect_uri in Melhor Envio app settings)
+ * GET /api/shipping/callback
+ */
+router.get('/callback', authMiddleware, shippingController.callback)
+
 export default router
