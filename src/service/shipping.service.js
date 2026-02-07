@@ -22,8 +22,8 @@ export const calculateShipping = async (payload, userId = null) => {
     let bodyToSend = payload
     try {
       if (payload && (payload.origin_postal_code || payload.destination_postal_code)) {
-        const fromPostal = payload.origin_postal_code || payload.from?.postal_code || payload.from_postal_code
-        const toPostal = payload.destination_postal_code || payload.to?.postal_code || payload.to_postal_code
+  const fromPostal = payload.origin_postal_code || payload.from?.postal_code || payload.from_postal_code
+  const toPostal = payload.destination_postal_code || payload.to?.postal_code || payload.to_postal_code
         const items = Array.isArray(payload.items) ? payload.items.map(i => ({
           weight: i.weight,
           length: i.length,
@@ -33,9 +33,27 @@ export const calculateShipping = async (payload, userId = null) => {
           insurance_value: i.insurance_value || i.insuranceValue || 0
         })) : []
 
+        // sanitize postal codes: Melhor Envio expects only digits (8 chars)
+        const sanitizeCEP = (s) => String(s || '').replace(/\D/g, '')
+        const fromDigits = sanitizeCEP(fromPostal)
+        const toDigits = sanitizeCEP(toPostal)
+
+        if (!fromDigits || fromDigits.length !== 8) {
+          const e = new Error('from.postal_code inválido. Deve conter 8 dígitos numéricos.')
+          e.status = 400
+          e.body = { from_postal_code: fromPostal }
+          throw e
+        }
+        if (!toDigits || toDigits.length !== 8) {
+          const e = new Error('to.postal_code inválido. Deve conter 8 dígitos numéricos.')
+          e.status = 400
+          e.body = { to_postal_code: toPostal }
+          throw e
+        }
+
         bodyToSend = {
-          from: { postal_code: String(fromPostal || '') },
-          to: { postal_code: String(toPostal || '') },
+          from: { postal_code: String(fromDigits) },
+          to: { postal_code: String(toDigits) },
           items
         }
         if (payload.services) bodyToSend.services = payload.services
