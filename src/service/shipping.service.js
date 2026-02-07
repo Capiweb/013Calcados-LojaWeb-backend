@@ -21,19 +21,28 @@ export const calculateShipping = async (payload, userId = null) => {
     // If caller provided origin_postal_code/destination_postal_code use from/to shape required by /v2/me/shipment/calculate
     let bodyToSend = payload
     try {
-      if (payload && (payload.origin_postal_code || payload.destination_postal_code)) {
-  const fromPostal = payload.origin_postal_code || payload.from?.postal_code || payload.from_postal_code
-  const toPostal = payload.destination_postal_code || payload.to?.postal_code || payload.to_postal_code
-        const items = Array.isArray(payload.items) ? payload.items.map(i => ({
-          weight: i.weight,
-          length: i.length,
-          height: i.height,
-          width: i.width,
-          quantity: i.quantity || 1,
-          insurance_value: i.insurance_value || i.insuranceValue || 0
-        })) : []
+      if (payload && (payload.origin_postal_code || payload.destination_postal_code || payload.items || payload.products)) {
+        const fromPostal = payload.origin_postal_code || payload.from?.postal_code || payload.from_postal_code
+        const toPostal = payload.destination_postal_code || payload.to?.postal_code || payload.to_postal_code
 
-        // sanitize postal codes: Melhor Envio expects only digits (8 chars)
+        // build products array from items or products
+        const sourceProducts = Array.isArray(payload.products) ? payload.products : (Array.isArray(payload.items) ? payload.items : [])
+        const products = sourceProducts.map(i => {
+          // normalize numeric fields
+          const rawWeight = Number(i.weight || 0)
+          // if weight looks like grams (>=1000), convert to kg
+          const weightKg = rawWeight >= 1000 ? Number((rawWeight / 1000).toFixed(3)) : rawWeight
+          return {
+            weight: weightKg,
+            length: Number(i.length || i.l || 0),
+            height: Number(i.height || i.h || 0),
+            width: Number(i.width || i.w || 0),
+            quantity: Number(i.quantity || 1),
+            insurance_value: Number(i.insurance_value || i.insuranceValue || 0)
+          }
+        })
+
+        // sanitize postal codes: remove non-digits
         const sanitizeCEP = (s) => String(s || '').replace(/\D/g, '')
         const fromDigits = sanitizeCEP(fromPostal)
         const toDigits = sanitizeCEP(toPostal)
@@ -54,10 +63,8 @@ export const calculateShipping = async (payload, userId = null) => {
         bodyToSend = {
           from: { postal_code: String(fromDigits) },
           to: { postal_code: String(toDigits) },
-          items
+          products
         }
-        if (payload.services) bodyToSend.services = payload.services
-        if (payload.delivery_type) bodyToSend.delivery_type = payload.delivery_type
       }
     } catch (mapError) {
       console.warn('shipping.calculateShipping mapping warning:', mapError?.message || mapError)
