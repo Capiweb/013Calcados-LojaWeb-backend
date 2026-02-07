@@ -42,18 +42,6 @@ const router = express.Router()
  *         description: Resultado do cálculo de frete
  */
 router.post('/calculate', authMiddleware, shippingController.calculate)
-
-/**
- * Initiate OAuth authorization with Melhor Envio (redirect to provider)
- * GET /api/shipping/authorize
- */
-router.get('/authorize', authMiddleware, shippingController.authorize)
-
-/**
- * OAuth callback endpoint (configured as redirect_uri in Melhor Envio app settings)
- * GET /api/shipping/callback
- */
-// callback must be reachable by provider (no auth required)
-router.get('/callback', shippingController.callback)
+// only calculate endpoint remains; OAuth routes removed — service uses MELHOR_ENVIO_TOKEN from .env
 
 export default router
