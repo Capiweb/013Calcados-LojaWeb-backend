@@ -28,6 +28,20 @@ export const getOrderById = async (id) => {
   return prisma.pedido.findUnique({ where: { id }, include: { itens: true, pagamento: true } })
 }
 
+export const getOrderByPedidoId = async (pedidoId) => {
+  if (!pedidoId) return null
+
+  return prisma.pedido.findUnique({
+    where: { id: pedidoId },
+    include: {
+      itens: true,
+      pagamento: true,
+      usuario: true
+    }
+  })
+}
+
+
 export const findPaymentByPagamentoId = async (pagamentoId) => {
   return prisma.pagamento.findFirst({ where: { pagamentoId } })
 }

@@ -4,6 +4,7 @@ import fetch from 'node-fetch'
 import * as productRepo from '../repositories/product.repository.js'
 import { getIo } from '../utils/io.js'
 import * as shippingService from './shipping.service.js'
+import { findUserById } from '../repositories/user.repository.js'
 
 const MP_ACCESS_TOKEN = process.env.MP_ACCESS_TOKEN
 const MP_BASE = 'https://api.mercadopago.com'
@@ -181,7 +182,7 @@ export const createMercadoPagoPreference = async (pedido) => {
   // quick token check to surface clearer error if token is invalid
   if (MP_ACCESS_TOKEN) {
     try {
-  const check = await fetch(`${MP_BASE}/users/me`, { headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` } })
+      const check = await fetch(`${MP_BASE}/users/me`, { headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` } })
       if (!check.ok) {
         const txt = await check.text()
         // Provide a friendly, actionable hint when MP returns 404 for token check
@@ -252,276 +253,493 @@ export const handleMpNotification = async (body) => {
     throw new Error(msg)
   }
 
-  // Helper to process a payment by its id: fetch payment data and run existing logic
-  const processPaymentById = async (paymentIdToProcess) => {
-    // fetch payment
-    let r
+  // // Helper to process a payment by its id: fetch payment data and run existing logic
+  // const processPaymentById = async (paymentIdToProcess) => {
+  //   // fetch payment
+  //   let r
+  //   try {
+  //     const paymentUrl = `${MP_BASE}/v1/payments/${paymentIdToProcess}`
+  //     console.log(`MP: solicitando pagamento (GET) ${paymentUrl} — token: ${maskToken(MP_ACCESS_TOKEN)}`)
+  //     r = await fetch(paymentUrl, { headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` } })
+  //   } catch (err) {
+  //     console.error(`MP request network error for payment ${paymentIdToProcess}:`, err?.message || err)
+  //     throw new Error('MP consulta failed')
+  //   }
+  //   if (!r.ok) {
+  //     let txt = ''
+  //     try { txt = await r.text() } catch (e) { txt = '<failed to read response body>' }
+  //     console.error(`MP consulta returned error for payment ${paymentIdToProcess}: status=${r.status} body=${txt} token=${maskToken(MP_ACCESS_TOKEN)}`)
+  //     // If MP reports 404 (resource not found) we won't attempt other MP endpoints here.
+  //     // The payments GET is our single source of truth for status updates. Return a
+  //     // structured result indicating not-found so the caller (webhook) can decide.
+  //     if (r.status === 404) return { ok: false, notFound: true, status: r.status, body: txt }
+  //     throw new Error(`MP consulta failed: ${r.status} ${txt}`)
+  //   }
+  //   const paymentData = await r.json()
+
+  //   // continue with existing mapping and DB logic using paymentData
+  //   const statusMap = {
+  //     approved: 'APROVADO',
+  //     pending: 'PENDENTE',
+  //     rejected: 'REJEITADO',
+  //     refunded: 'REEMBOLSADO'
+  //   }
+  //   const mpStatus = paymentData.status
+  //   const mapped = statusMap[mpStatus] || 'PENDENTE'
+
+  //   const pagamentoId = paymentIdToProcess
+
+  //   // helper: safely decrement stock for a pedido; if any item fails to decrement
+  //   // we rollback previous decrements and return { ok: false, reason }
+  //   const safeDecrementStockForPedido = async (pedido) => {
+  //     const decremented = []
+  //     try {
+  //       for (const it of (pedido.itens || [])) {
+  //         const res = await productRepo.decrementStock(it.produtoVariacaoId, it.quantidade)
+  //         // Prisma updateMany returns { count: n } in some contexts, or the raw result
+  //         const affected = res?.count ?? res
+  //         if (!affected || affected === 0) {
+  //           // rollback previous
+  //           for (const prev of decremented) {
+  //             try { await productRepo.incrementStock(prev.produtoVariacaoId, prev.quantidade) } catch (e) { console.error('rollback increment failed', e) }
+  //           }
+  //           return { ok: false, reason: `estoque insuficiente para variacao ${it.produtoVariacaoId}` }
+  //         }
+  //         decremented.push({ produtoVariacaoId: it.produtoVariacaoId, quantidade: it.quantidade })
+  //       }
+  //       return { ok: true }
+  //     } catch (e) {
+  //       // rollback on unexpected error
+  //       for (const prev of decremented) {
+  //         try { await productRepo.incrementStock(prev.produtoVariacaoId, prev.quantidade) } catch (err) { console.error('rollback increment failed', err) }
+  //       }
+  //       return { ok: false, reason: e?.message || e }
+  //     }
+  //   }
+
+  //   const existingByPagamentoId = await orderRepo.findPaymentByPagamentoId(pagamentoId)
+  //   // Prefer explicit linkers: external_reference, preference_id or merchant order id
+  //   const pedidoIdFromMp = paymentData.external_reference || paymentData.preference_id || (paymentData.order && paymentData.order.id) || null
+
+  //   // Reconciliation: if MP returned a pedido identifier (external_reference / preference_id / order.id)
+  //   // ensure the DB has a pagamento record linked to that pedido with the correct pagamentoId and status.
+  //   if (pedidoIdFromMp) {
+  //     try {
+  //       const existingByPedidoRecon = await orderRepo.findPaymentByPedidoId(pedidoIdFromMp)
+  //       // capture previous status before we update/create records so we can decide whether to decrement
+  //       const previousPagamentoStatus = existingByPedidoRecon?.status || null
+  //       if (existingByPedidoRecon) {
+  //         if (existingByPedidoRecon.pagamentoId !== pagamentoId) {
+  //           console.log(`reconciliation: updating pagamentoId for pedido ${pedidoIdFromMp}: ${existingByPedidoRecon.pagamentoId} -> ${pagamentoId}`)
+  //           await orderRepo.updatePaymentId(existingByPedidoRecon.pagamentoId, pagamentoId)
+  //         } else {
+  //           console.log(`reconciliation: pagamento already matches for pedido ${pedidoIdFromMp} -> ${pagamentoId}`)
+  //         }
+  //       } else {
+  //         console.log(`reconciliation: creating pagamento for pedido ${pedidoIdFromMp} pagamentoId=${pagamentoId} status=${mapped}`)
+  //         await orderRepo.createPaymentForPedido(pedidoIdFromMp, pagamentoId, { provedor: 'mercado_pago', status: mapped })
+  //       }
+
+  //       // Update payment status (idempotent)
+  //       await orderRepo.updatePaymentStatus(pagamentoId, mapped)
+
+  //       // If approved, mark order as PAGO
+  //       if (mapped === 'APROVADO') {
+  //         console.log(`reconciliation: marking pedido ${pedidoIdFromMp} as PAGO`)
+  //         try { await orderRepo.updateOrderStatus(pedidoIdFromMp, 'PAGO') } catch (e) { console.warn('reconciliation: updateOrderStatus failed', e?.message || e) }
+  //       }
+
+  //       // emit socket event
+  //       try { const io = getIo(); if (io) io.to(`order:${pedidoIdFromMp}`).emit('order.updated', { orderId: pedidoIdFromMp, status: mapped }) } catch (e) { console.warn('socket emit failed (reconciliation)', e?.message || e) }
+
+  //       // decrement stock if approved
+  //       if (mapped === 'APROVADO') {
+  //         try {
+  //           const pedido = await orderRepo.getOrderByPaymentId(pagamentoId)
+  //           // Decide whether to decrement based on previous pagamento status (prior to our updates).
+  //           // If previousPagamentoStatus was already 'APROVADO', skip. Otherwise, proceed.
+  //           let shouldDecrement = true
+  //           try {
+  //             if (previousPagamentoStatus === 'APROVADO') {
+  //               shouldDecrement = false
+  //               console.log(`reconciliation: skipping stock decrement for pedido ${pedidoIdFromMp} because previous payment status was APROVADO`)
+  //             }
+  //           } catch (e) { /* ignore and proceed */ }
+  //           if (shouldDecrement && pedido && pedido.itens) {
+  //             const dres = await safeDecrementStockForPedido(pedido)
+  //             if (!dres.ok) {
+  //               console.error('reconciliation: safe decrement failed:', dres.reason)
+  //               // update payment status to REJEITADO or PENDENTE and notify
+  //               try { await orderRepo.updatePaymentStatus(pagamentoId, 'REJEITADO') } catch (e) { console.warn('failed to update payment status after decrement failure', e?.message || e) }
+  //               return { ok: false, mpStatus: paymentData.status, reason: dres.reason }
+  //             }
+  //           }
+  //           // clear user's cart if we can
+  //           try { if (pedido && pedido.usuarioId) await cartRepo.clearCart(pedido.usuarioId) } catch (e) { /* ignore */ }
+  //         } catch (e) { console.warn('reconciliation: decrement stock failed', e?.message || e) }
+  //       }
+
+  //       return { ok: true, mpStatus: paymentData.status, reconciled: true, pedidoId: pedidoIdFromMp }
+  //     } catch (e) {
+  //       console.error('reconciliation failed:', e?.message || e)
+  //       // continue with existing flow if reconciliation failed
+  //     }
+  //   }
+
+  //   if (existingByPagamentoId) {
+  //     console.log(`processPaymentById: existing payment record found for pagamentoId=${pagamentoId}, updating status -> ${mapped}`)
+  //     await orderRepo.updatePaymentStatus(pagamentoId, mapped)
+  //     try {
+  //       const io = getIo()
+  //       const pedido = await orderRepo.getOrderByPaymentId(pagamentoId)
+  //       if (mapped === 'APROVADO' && pedido) {
+  //         console.log(`processPaymentById: marking pedido ${pedido.id} as PAGO`)
+  //         // only decrement stock/create PAGO if previous pagamento status wasn't already APROVADO
+  //         const prevStatus = existingByPagamentoId?.status
+  //         if (prevStatus !== 'APROVADO') {
+  //           try {
+  //             const dres = await safeDecrementStockForPedido(pedido)
+  //             if (!dres.ok) {
+  //               console.error('processPaymentById: safe decrement failed:', dres.reason)
+  //               await orderRepo.updatePaymentStatus(pagamentoId, 'REJEITADO')
+  //               return { ok: false, mpStatus: paymentData.status, reason: dres.reason }
+  //             }
+  //           } catch (e) { console.warn('processPaymentById: decrement stock failed', e?.message || e) }
+  //         } else {
+  //           console.log(`processPaymentById: previous payment status was APROVADO for pagamentoId=${pagamentoId}, skipping decrement`)
+  //         }
+  //         await orderRepo.updateOrderStatus(pedido.id, 'PAGO')
+  //         // start shipment/job in background
+  //         try { setImmediate(() => startShipmentPurchaseJob(pedido.id)) } catch (e) { console.warn('failed to start shipment job', e?.message || e) }
+  //       }
+  //       if (io && pedido) io.to(`order:${pedido.id}`).emit('order.updated', { orderId: pedido.id, status: mapped })
+  //     } catch (e) { console.warn('socket emit failed (existingByPagamentoId)', e?.message || e) }
+  //   } else if (pedidoIdFromMp) {
+  //     const existingByPedido = await orderRepo.findPaymentByPedidoId(pedidoIdFromMp)
+  //     if (existingByPedido) {
+  //       console.log(`processPaymentById: found placeholder payment for pedido ${pedidoIdFromMp}, replacing pagamentoId ${existingByPedido.pagamentoId} -> ${pagamentoId} and updating status ${mapped}`)
+  //       await orderRepo.updatePaymentId(existingByPedido.pagamentoId, pagamentoId)
+  //       await orderRepo.updatePaymentStatus(pagamentoId, mapped)
+  //       try { const io = getIo(); if (io && pedidoIdFromMp) io.to(`order:${pedidoIdFromMp}`).emit('order.updated', { orderId: pedidoIdFromMp, status: mapped }) } catch (e) { console.warn('socket emit failed (existingByPedido)', e?.message || e) }
+  //       if (mapped === 'APROVADO') {
+  //         console.log(`processPaymentById: marking pedido ${pedidoIdFromMp} as PAGO`)
+  //         await orderRepo.updateOrderStatus(pedidoIdFromMp, 'PAGO')
+  //         try { setImmediate(() => startShipmentPurchaseJob(pedidoIdFromMp)) } catch (e) { console.warn('failed to start shipment job', e?.message || e) }
+  //       }
+  //     } else {
+  //       console.log(`processPaymentById: creating new pagamento for pedido ${pedidoIdFromMp} pagamentoId=${pagamentoId} status=${mapped}`)
+  //       await orderRepo.createPaymentForPedido(pedidoIdFromMp, pagamentoId, { provedor: 'mercado_pago', status: mapped })
+  //       try { const io = getIo(); if (io && pedidoIdFromMp) io.to(`order:${pedidoIdFromMp}`).emit('order.updated', { orderId: pedidoIdFromMp, status: mapped }) } catch (e) { console.warn('socket emit failed (createPaymentForPedido)', e?.message || e) }
+  //       if (mapped === 'APROVADO') {
+  //         console.log(`processPaymentById: marking pedido ${pedidoIdFromMp} as PAGO (new pagamento)`)
+  //         await orderRepo.updateOrderStatus(pedidoIdFromMp, 'PAGO')
+  //         try { setImmediate(() => startShipmentPurchaseJob(pedidoIdFromMp)) } catch (e) { console.warn('failed to start shipment job', e?.message || e) }
+  //       }
+  //     }
+  //   } else {
+  //     // No pedido id returned by MP and no existing payment found. We avoid creating an orphan pagamento
+  //     // without a pedidoId because the Pagamento model enforces pedidoId @unique and application code
+  //     // expects pagamentos to be tied to pedidos. Log and return.
+  //     console.warn(`processPaymentById: payment ${pagamentoId} has no associated pedido (external_reference/preference_id/order.id); skipping creation of orphan pagamento`)
+  //   }
+
+  //   if (mapped === 'APROVADO') {
+  //     const pedido = await orderRepo.getOrderByPaymentId(pagamentoId)
+  //     // check if we already decremented stock for this pedido
+  //     let shouldDecrementFinal = true
+  //     try {
+  //       if (pedido && pedido.id) {
+  //         const existingPagFinal = await orderRepo.findPaymentByPedidoId(pedido.id)
+  //         if (existingPagFinal && existingPagFinal.status === 'APROVADO') {
+  //           shouldDecrementFinal = false
+  //           console.log(`processPaymentById: skipping final stock decrement for pedido ${pedido.id} because payment already APROVADO`)
+  //         }
+  //       }
+  //     } catch (e) { /* ignore check errors */ }
+  //     if (shouldDecrementFinal && pedido && pedido.itens) {
+  //       const dres = await safeDecrementStockForPedido(pedido)
+  //       if (!dres.ok) {
+  //         console.error('processPaymentById final: safe decrement failed:', dres.reason)
+  //         await orderRepo.updatePaymentStatus(pagamentoId, 'REJEITADO')
+  //         return { ok: false, mpStatus: paymentData.status, reason: dres.reason }
+  //       }
+  //     }
+  //     if (pedido) {
+  //       console.log(`processPaymentById: ensuring pedido ${pedido.id} marked as PAGO (APROVADO)`)
+  //       await orderRepo.updateOrderStatus(pedido.id, 'PAGO')
+  //       try { setImmediate(() => startShipmentPurchaseJob(pedido.id)) } catch (e) { console.warn('failed to start shipment job', e?.message || e) }
+  //     }
+  //     try { const io = getIo(); if (io && pedido) io.to(`order:${pedido.id}`).emit('order.updated', { orderId: pedido.id, status: mapped }) } catch (e) { console.warn('socket emit failed (APROVADO)', e?.message || e) }
+  //     // clear user's cart after successful stock decrement
+  //     try { if (pedido && pedido.usuarioId) await cartRepo.clearCart(pedido.usuarioId) } catch (e) { console.warn('clearCart failed', e?.message || e) }
+  //   }
+  //   return { ok: true, mpStatus: paymentData.status }
+  // }
+
+  const safeDecrementStockForPedido = async (pedido) => {
+    const decremented = []
     try {
-      const paymentUrl = `${MP_BASE}/v1/payments/${paymentIdToProcess}`
-  console.log(`MP: solicitando pagamento (GET) ${paymentUrl} — token: ${maskToken(MP_ACCESS_TOKEN)}`)
-      r = await fetch(paymentUrl, { headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` } })
-    } catch (err) {
-      console.error(`MP request network error for payment ${paymentIdToProcess}:`, err?.message || err)
-      throw new Error('MP consulta failed')
+      for (const it of (pedido.itens || [])) {
+        const res = await productRepo.decrementStock(it.produtoVariacaoId, it.quantidade)
+        // Prisma updateMany returns { count: n } in some contexts, or the raw result
+        const affected = res?.count ?? res
+        if (!affected || affected === 0) {
+          // rollback previous
+          for (const prev of decremented) {
+            try { await productRepo.incrementStock(prev.produtoVariacaoId, prev.quantidade) } catch (e) { console.error('rollback increment failed', e) }
+          }
+          return { ok: false, reason: `estoque insuficiente para variacao ${it.produtoVariacaoId}` }
+        }
+        decremented.push({ produtoVariacaoId: it.produtoVariacaoId, quantidade: it.quantidade })
+      }
+      return { ok: true }
+    } catch (e) {
+      // rollback on unexpected error
+      for (const prev of decremented) {
+        try { await productRepo.incrementStock(prev.produtoVariacaoId, prev.quantidade) } catch (err) { console.error('rollback increment failed', err) }
+      }
+      return { ok: false, reason: e?.message || e }
     }
+  }
+
+  const fetchPayment = async (paymentId) => {
+    const url = `${MP_BASE}/v1/payments/${paymentId}`
+    let r
+
+    try {
+      r = await fetch(url, {
+        headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` },
+      })
+    } catch (e) {
+      throw new Error('MP network error')
+    }
+
     if (!r.ok) {
-      let txt = ''
-      try { txt = await r.text() } catch (e) { txt = '<failed to read response body>' }
-      console.error(`MP consulta returned error for payment ${paymentIdToProcess}: status=${r.status} body=${txt} token=${maskToken(MP_ACCESS_TOKEN)}`)
-      // If MP reports 404 (resource not found) we won't attempt other MP endpoints here.
-      // The payments GET is our single source of truth for status updates. Return a
-      // structured result indicating not-found so the caller (webhook) can decide.
-      if (r.status === 404) return { ok: false, notFound: true, status: r.status, body: txt }
-      throw new Error(`MP consulta failed: ${r.status} ${txt}`)
+      if (r.status === 404) return null
+      const body = await r.text().catch(() => '')
+      throw new Error(`MP error ${r.status}: ${body}`)
     }
-    const paymentData = await r.json()
 
-    // continue with existing mapping and DB logic using paymentData
-    const statusMap = {
-      approved: 'APROVADO',
-      pending: 'PENDENTE',
-      rejected: 'REJEITADO',
-      refunded: 'REEMBOLSADO'
+    return r.json()
+  }
+
+  const mapMpStatus = (status) =>
+  ({
+    approved: 'APROVADO',
+    pending: 'PENDENTE',
+    rejected: 'REJEITADO',
+    refunded: 'REEMBOLSADO',
+  }[status] ?? 'PENDENTE')
+
+  const resolvePedidoId = (paymentData) =>
+    paymentData.external_reference ||
+    paymentData.preference_id ||
+    paymentData.order?.id ||
+    null
+
+
+  const processPaymentById = async (paymentId) => {
+    const paymentData = await fetchPayment(paymentId)
+    if (!paymentData) return { ok: false, notFound: true }
+
+    const mappedStatus = mapMpStatus(paymentData.status)
+    const pedidoId = resolvePedidoId(paymentData)
+
+    let shouldMarkPago = false
+    let shouldDecrementStock = false
+    let shouldStartShipment = false
+
+    let pedido = null
+    let previousPaymentStatus = null
+
+    // --- Reconciliação ---
+    if (pedidoId) {
+      const existingPayment = await orderRepo.findPaymentByPedidoId(pedidoId)
+      previousPaymentStatus = existingPayment?.status ?? null
+
+      if (!existingPayment) {
+        await orderRepo.createPaymentForPedido(pedidoId, paymentId, {
+          provedor: 'mercado_pago',
+          status: mappedStatus,
+        })
+      } else if (existingPayment.pagamentoId !== paymentId) {
+        await orderRepo.updatePaymentId(existingPayment.pagamentoId, paymentId)
+      }
+
+      await orderRepo.updatePaymentStatus(paymentId, mappedStatus)
+
+      if (mappedStatus === 'APROVADO' && previousPaymentStatus !== 'APROVADO') {
+        shouldMarkPago = true
+        shouldDecrementStock = true
+        shouldStartShipment = true
+      }
+
+      pedido = await orderRepo.getOrderByPedidoId(pedidoId)
     }
-    const mpStatus = paymentData.status
-    const mapped = statusMap[mpStatus] || 'PENDENTE'
 
-    const pagamentoId = paymentIdToProcess
+    // --- Fallback: pagamento já existente ---
+    if (!pedido) {
+      const existingPayment = await orderRepo.findPaymentByPagamentoId(paymentId)
+      if (!existingPayment) {
+        return { ok: true, ignored: true }
+      }
 
-    // helper: safely decrement stock for a pedido; if any item fails to decrement
-    // we rollback previous decrements and return { ok: false, reason }
-    const safeDecrementStockForPedido = async (pedido) => {
-      const decremented = []
-      try {
-        for (const it of (pedido.itens || [])) {
-          const res = await productRepo.decrementStock(it.produtoVariacaoId, it.quantidade)
-          // Prisma updateMany returns { count: n } in some contexts, or the raw result
-          const affected = res?.count ?? res
-          if (!affected || affected === 0) {
-            // rollback previous
-            for (const prev of decremented) {
-              try { await productRepo.incrementStock(prev.produtoVariacaoId, prev.quantidade) } catch (e) { console.error('rollback increment failed', e) }
-            }
-            return { ok: false, reason: `estoque insuficiente para variacao ${it.produtoVariacaoId}` }
-          }
-          decremented.push({ produtoVariacaoId: it.produtoVariacaoId, quantidade: it.quantidade })
-        }
-        return { ok: true }
-      } catch (e) {
-        // rollback on unexpected error
-        for (const prev of decremented) {
-          try { await productRepo.incrementStock(prev.produtoVariacaoId, prev.quantidade) } catch (err) { console.error('rollback increment failed', err) }
-        }
-        return { ok: false, reason: e?.message || e }
+      previousPaymentStatus = existingPayment.status
+      await orderRepo.updatePaymentStatus(paymentId, mappedStatus)
+
+      if (mappedStatus === 'APROVADO' && previousPaymentStatus !== 'APROVADO') {
+        pedido = await orderRepo.getOrderByPaymentId(paymentId)
+        shouldMarkPago = true
+        shouldDecrementStock = true
+        shouldStartShipment = true
       }
     }
 
-    const existingByPagamentoId = await orderRepo.findPaymentByPagamentoId(pagamentoId)
-  // Prefer explicit linkers: external_reference, preference_id or merchant order id
-  const pedidoIdFromMp = paymentData.external_reference || paymentData.preference_id || (paymentData.order && paymentData.order.id) || null
-
-    // Reconciliation: if MP returned a pedido identifier (external_reference / preference_id / order.id)
-    // ensure the DB has a pagamento record linked to that pedido with the correct pagamentoId and status.
-    if (pedidoIdFromMp) {
-      try {
-        const existingByPedidoRecon = await orderRepo.findPaymentByPedidoId(pedidoIdFromMp)
-        // capture previous status before we update/create records so we can decide whether to decrement
-        const previousPagamentoStatus = existingByPedidoRecon?.status || null
-        if (existingByPedidoRecon) {
-          if (existingByPedidoRecon.pagamentoId !== pagamentoId) {
-            console.log(`reconciliation: updating pagamentoId for pedido ${pedidoIdFromMp}: ${existingByPedidoRecon.pagamentoId} -> ${pagamentoId}`)
-            await orderRepo.updatePaymentId(existingByPedidoRecon.pagamentoId, pagamentoId)
-          } else {
-            console.log(`reconciliation: pagamento already matches for pedido ${pedidoIdFromMp} -> ${pagamentoId}`)
-          }
-        } else {
-          console.log(`reconciliation: creating pagamento for pedido ${pedidoIdFromMp} pagamentoId=${pagamentoId} status=${mapped}`)
-          await orderRepo.createPaymentForPedido(pedidoIdFromMp, pagamentoId, { provedor: 'mercado_pago', status: mapped })
-        }
-
-        // Update payment status (idempotent)
-        await orderRepo.updatePaymentStatus(pagamentoId, mapped)
-
-        // If approved, mark order as PAGO
-        if (mapped === 'APROVADO') {
-          console.log(`reconciliation: marking pedido ${pedidoIdFromMp} as PAGO`)
-          try { await orderRepo.updateOrderStatus(pedidoIdFromMp, 'PAGO') } catch (e) { console.warn('reconciliation: updateOrderStatus failed', e?.message || e) }
-        }
-
-        // emit socket event
-        try { const io = getIo(); if (io) io.to(`order:${pedidoIdFromMp}`).emit('order.updated', { orderId: pedidoIdFromMp, status: mapped }) } catch (e) { console.warn('socket emit failed (reconciliation)', e?.message || e) }
-
-        // decrement stock if approved
-        if (mapped === 'APROVADO') {
-          try {
-            const pedido = await orderRepo.getOrderByPaymentId(pagamentoId)
-            // Decide whether to decrement based on previous pagamento status (prior to our updates).
-            // If previousPagamentoStatus was already 'APROVADO', skip. Otherwise, proceed.
-            let shouldDecrement = true
-            try {
-              if (previousPagamentoStatus === 'APROVADO') {
-                shouldDecrement = false
-                console.log(`reconciliation: skipping stock decrement for pedido ${pedidoIdFromMp} because previous payment status was APROVADO`)
-              }
-            } catch (e) { /* ignore and proceed */ }
-            if (shouldDecrement && pedido && pedido.itens) {
-              const dres = await safeDecrementStockForPedido(pedido)
-              if (!dres.ok) {
-                console.error('reconciliation: safe decrement failed:', dres.reason)
-                // update payment status to REJEITADO or PENDENTE and notify
-                try { await orderRepo.updatePaymentStatus(pagamentoId, 'REJEITADO') } catch (e) { console.warn('failed to update payment status after decrement failure', e?.message || e) }
-                return { ok: false, mpStatus: paymentData.status, reason: dres.reason }
-              }
-            }
-            // clear user's cart if we can
-            try { if (pedido && pedido.usuarioId) await cartRepo.clearCart(pedido.usuarioId) } catch (e) { /* ignore */ }
-          } catch (e) { console.warn('reconciliation: decrement stock failed', e?.message || e) }
-        }
-
-        return { ok: true, mpStatus: paymentData.status, reconciled: true, pedidoId: pedidoIdFromMp }
-      } catch (e) {
-        console.error('reconciliation failed:', e?.message || e)
-        // continue with existing flow if reconciliation failed
+    // --- Side-effects (1 vez, controlado) ---
+    if (pedido && shouldDecrementStock) {
+      const res = await safeDecrementStockForPedido(pedido)
+      if (!res.ok) {
+        await orderRepo.updatePaymentStatus(paymentId, 'REJEITADO')
+        return { ok: false, reason: res.reason }
       }
     }
 
-    if (existingByPagamentoId) {
-      console.log(`processPaymentById: existing payment record found for pagamentoId=${pagamentoId}, updating status -> ${mapped}`)
-      await orderRepo.updatePaymentStatus(pagamentoId, mapped)
+    if (pedido && shouldMarkPago) {
+      await orderRepo.updateOrderStatus(pedido.id, 'PAGO')
+    }
+
+    if (pedido && shouldStartShipment) {
+      await startShipmentPurchaseJob(pedido.id)
+    }
+
+    if (pedido) {
       try {
         const io = getIo()
-        const pedido = await orderRepo.getOrderByPaymentId(pagamentoId)
-        if (mapped === 'APROVADO' && pedido) {
-          console.log(`processPaymentById: marking pedido ${pedido.id} as PAGO`)
-          // only decrement stock/create PAGO if previous pagamento status wasn't already APROVADO
-          const prevStatus = existingByPagamentoId?.status
-          if (prevStatus !== 'APROVADO') {
-            try {
-              const dres = await safeDecrementStockForPedido(pedido)
-              if (!dres.ok) {
-                console.error('processPaymentById: safe decrement failed:', dres.reason)
-                await orderRepo.updatePaymentStatus(pagamentoId, 'REJEITADO')
-                return { ok: false, mpStatus: paymentData.status, reason: dres.reason }
-              }
-            } catch (e) { console.warn('processPaymentById: decrement stock failed', e?.message || e) }
-          } else {
-            console.log(`processPaymentById: previous payment status was APROVADO for pagamentoId=${pagamentoId}, skipping decrement`)
-          }
-          await orderRepo.updateOrderStatus(pedido.id, 'PAGO')
-          // start shipment/job in background
-          try { setImmediate(() => startShipmentPurchaseJob(pedido.id)) } catch (e) { console.warn('failed to start shipment job', e?.message || e) }
-        }
-        if (io && pedido) io.to(`order:${pedido.id}`).emit('order.updated', { orderId: pedido.id, status: mapped })
-      } catch (e) { console.warn('socket emit failed (existingByPagamentoId)', e?.message || e) }
-    } else if (pedidoIdFromMp) {
-      const existingByPedido = await orderRepo.findPaymentByPedidoId(pedidoIdFromMp)
-      if (existingByPedido) {
-        console.log(`processPaymentById: found placeholder payment for pedido ${pedidoIdFromMp}, replacing pagamentoId ${existingByPedido.pagamentoId} -> ${pagamentoId} and updating status ${mapped}`)
-        await orderRepo.updatePaymentId(existingByPedido.pagamentoId, pagamentoId)
-        await orderRepo.updatePaymentStatus(pagamentoId, mapped)
-        try { const io = getIo(); if (io && pedidoIdFromMp) io.to(`order:${pedidoIdFromMp}`).emit('order.updated', { orderId: pedidoIdFromMp, status: mapped }) } catch (e) { console.warn('socket emit failed (existingByPedido)', e?.message || e) }
-        if (mapped === 'APROVADO') {
-          console.log(`processPaymentById: marking pedido ${pedidoIdFromMp} as PAGO`) 
-          await orderRepo.updateOrderStatus(pedidoIdFromMp, 'PAGO')
-          try { setImmediate(() => startShipmentPurchaseJob(pedidoIdFromMp)) } catch (e) { console.warn('failed to start shipment job', e?.message || e) }
-        }
-      } else {
-        console.log(`processPaymentById: creating new pagamento for pedido ${pedidoIdFromMp} pagamentoId=${pagamentoId} status=${mapped}`)
-        await orderRepo.createPaymentForPedido(pedidoIdFromMp, pagamentoId, { provedor: 'mercado_pago', status: mapped })
-        try { const io = getIo(); if (io && pedidoIdFromMp) io.to(`order:${pedidoIdFromMp}`).emit('order.updated', { orderId: pedidoIdFromMp, status: mapped }) } catch (e) { console.warn('socket emit failed (createPaymentForPedido)', e?.message || e) }
-        if (mapped === 'APROVADO') {
-          console.log(`processPaymentById: marking pedido ${pedidoIdFromMp} as PAGO (new pagamento)`) 
-          await orderRepo.updateOrderStatus(pedidoIdFromMp, 'PAGO')
-          try { setImmediate(() => startShipmentPurchaseJob(pedidoIdFromMp)) } catch (e) { console.warn('failed to start shipment job', e?.message || e) }
-        }
-      }
-    } else {
-      // No pedido id returned by MP and no existing payment found. We avoid creating an orphan pagamento
-      // without a pedidoId because the Pagamento model enforces pedidoId @unique and application code
-      // expects pagamentos to be tied to pedidos. Log and return.
-      console.warn(`processPaymentById: payment ${pagamentoId} has no associated pedido (external_reference/preference_id/order.id); skipping creation of orphan pagamento`) 
+        io?.to(`order:${pedido.id}`).emit('order.updated', {
+          orderId: pedido.id,
+          status: mappedStatus,
+        })
+      } catch { }
     }
 
-    if (mapped === 'APROVADO') {
-      const pedido = await orderRepo.getOrderByPaymentId(pagamentoId)
-      // check if we already decremented stock for this pedido
-      let shouldDecrementFinal = true
-      try {
-        if (pedido && pedido.id) {
-          const existingPagFinal = await orderRepo.findPaymentByPedidoId(pedido.id)
-          if (existingPagFinal && existingPagFinal.status === 'APROVADO') {
-            shouldDecrementFinal = false
-            console.log(`processPaymentById: skipping final stock decrement for pedido ${pedido.id} because payment already APROVADO`)
-          }
-        }
-      } catch (e) { /* ignore check errors */ }
-      if (shouldDecrementFinal && pedido && pedido.itens) {
-        const dres = await safeDecrementStockForPedido(pedido)
-        if (!dres.ok) {
-          console.error('processPaymentById final: safe decrement failed:', dres.reason)
-          await orderRepo.updatePaymentStatus(pagamentoId, 'REJEITADO')
-          return { ok: false, mpStatus: paymentData.status, reason: dres.reason }
-        }
-      }
-      if (pedido) {
-        console.log(`processPaymentById: ensuring pedido ${pedido.id} marked as PAGO (APROVADO)`) 
-          await orderRepo.updateOrderStatus(pedido.id, 'PAGO')
-          try { setImmediate(() => startShipmentPurchaseJob(pedido.id)) } catch (e) { console.warn('failed to start shipment job', e?.message || e) }
-      }
-      try { const io = getIo(); if (io && pedido) io.to(`order:${pedido.id}`).emit('order.updated', { orderId: pedido.id, status: mapped }) } catch (e) { console.warn('socket emit failed (APROVADO)', e?.message || e) }
-      // clear user's cart after successful stock decrement
-      try { if (pedido && pedido.usuarioId) await cartRepo.clearCart(pedido.usuarioId) } catch (e) { console.warn('clearCart failed', e?.message || e) }
-    }
     return { ok: true, mpStatus: paymentData.status }
   }
 
-  // Background: start shipment creation and purchase for orders marked as PAGO
-  const startShipmentPurchaseJob = async (pedidoId, attempt = 0) => {
-    const MAX_ATTEMPTS = 3
-    try {
-      const pedido = await orderRepo.getOrderById(pedidoId)
-      if (!pedido) throw new Error('Pedido não encontrado')
-      if (pedido.melhorenvio_shipment_id) {
-        // already created
-      } else {
-        // build shipment payload from pedido
-        const products = (pedido.itens || []).map(it => ({
-          weight: Number(it.preco) > 0 ? 1 : 1, // placeholder weight; ideally store real weight per product
-          length: 20,
-          height: 10,
-          width: 15,
-          quantity: it.quantidade,
-          insurance_value: Number(it.preco || 0)
-        }))
-        const shipmentPayload = {
-          from: { postal_code: process.env.MELHOR_ENVIO_ORIGIN_POSTAL_CODE || '01000000' },
-          to: { postal_code: String(pedido.cep || '').replace(/\D/g, '') },
-          products
-        }
-        const createRes = await shippingService.createShipment(shipmentPayload)
-        await orderRepo.updateOrderShippingInfo(pedidoId, { melhorenvio_shipment_id: createRes.id || createRes.shipment_id, shipping_metadata: createRes })
-      }
 
-      // purchase
-      const shipmentId = pedido.melhorenvio_shipment_id || (await orderRepo.getOrderById(pedidoId)).melhorenvio_shipment_id
-      if (shipmentId) {
-        const purchaseRes = await shippingService.purchaseShipment(shipmentId, {})
-        const purchaseId = purchaseRes.id || purchaseRes.purchase_id || purchaseRes.result?.id
-        const tracking = purchaseRes.tracking_number || purchaseRes.result?.tracking || null
-        const label = purchaseRes.label_url || purchaseRes.result?.label_url || purchaseRes.result?.label || null
-        await orderRepo.updateOrderShippingInfo(pedidoId, { melhorenvio_purchase_id: purchaseId, tracking_number: tracking, label_url: label, shipping_status: 'PURCHASED', shipping_metadata: { ...(purchaseRes || {}) } })
-      }
-    } catch (err) {
-      console.error('startShipmentPurchaseJob error:', err?.message || err)
-      if (attempt < 3) {
-        const backoff = Math.pow(2, attempt) * 1000
-        setTimeout(() => startShipmentPurchaseJob(pedidoId, attempt + 1), backoff)
-      } else {
-        // persist failure metadata
-        try { await orderRepo.updateOrderShippingInfo(pedidoId, { shipping_status: 'FAILED', shipping_metadata: { error: String(err?.message || err) } }) } catch (e) { /* ignore */ }
-      }
-    }
-  }
+  // Background: start shipment creation and purchase for orders marked as PAGO
+  // const startShipmentPurchaseJob = async (pedidoId, attempt = 0) => {
+  //   const MAX_ATTEMPTS = 3
+
+  //   console.log('[JOB] startShipmentPurchaseJob', { pedidoId, attempt })
+
+  //   try {
+  //     const pedido = await orderRepo.getOrderById(pedidoId)
+  //     console.log('[JOB] pedido carregado', { exists: !!pedido })
+
+  //     if (!pedido) throw new Error('Pedido não encontrado')
+
+  //     if (!pedido.melhorenvio_shipment_id) {
+  //       console.log('[JOB] criando shipment')
+
+  //       const products = (pedido.itens || []).map(it => ({
+  //         weight: 1,
+  //         length: 20,
+  //         height: 10,
+  //         width: 15,
+  //         quantity: it.quantidade,
+  //         insurance_value: Number(it.preco || 0)
+  //       }))
+
+  //       const shipmentPayload = {
+  //         from: { postal_code: process.env.MELHOR_ENVIO_ORIGIN_POSTAL_CODE || '01000000' },
+  //         to: { postal_code: String(pedido.cep || '').replace(/\D/g, '') },
+  //         products
+  //       }
+
+  //       console.log('[JOB] shipment payload', shipmentPayload)
+
+  //       const createRes = await shippingService.createShipment(shipmentPayload)
+
+  //       console.log('[JOB] shipment criado', {
+  //         response: createRes,
+  //         shipmentId: createRes?.id || createRes?.shipment_id
+  //       })
+
+  //       await orderRepo.updateOrderShippingInfo(pedidoId, {
+  //         melhorenvio_shipment_id: createRes.id || createRes.shipment_id,
+  //         shipping_metadata: createRes
+  //       })
+  //     } else {
+  //       console.log('[JOB] shipment já existe', {
+  //         shipmentId: pedido.melhorenvio_shipment_id
+  //       })
+  //     }
+
+  //     const freshPedido = await orderRepo.getOrderById(pedidoId)
+  //     const shipmentId = freshPedido?.melhorenvio_shipment_id
+
+  //     console.log('[JOB] iniciando compra', { shipmentId })
+
+  //     if (!shipmentId) throw new Error('Shipment ID ausente')
+
+  //     const purchaseRes = await shippingService.purchaseShipment(shipmentId, {})
+
+  //     console.log('[JOB] compra realizada', purchaseRes)
+
+  //     const purchaseId =
+  //       purchaseRes.id ||
+  //       purchaseRes.purchase_id ||
+  //       purchaseRes.result?.id
+
+  //     const tracking =
+  //       purchaseRes.tracking_number ||
+  //       purchaseRes.result?.tracking ||
+  //       null
+
+  //     const label =
+  //       purchaseRes.label_url ||
+  //       purchaseRes.result?.label_url ||
+  //       purchaseRes.result?.label ||
+  //       null
+
+  //     await orderRepo.updateOrderShippingInfo(pedidoId, {
+  //       melhorenvio_purchase_id: purchaseId,
+  //       tracking_number: tracking,
+  //       label_url: label,
+  //       shipping_status: 'PURCHASED',
+  //       shipping_metadata: purchaseRes
+  //     })
+
+  //     console.log('[JOB] finalizado com sucesso', {
+  //       pedidoId,
+  //       shipmentId,
+  //       purchaseId
+  //     })
+
+  //   } catch (err) {
+  //     console.error('[JOB] erro', {
+  //       pedidoId,
+  //       attempt,
+  //       message: err?.message,
+  //       stack: err?.stack
+  //     })
+
+  //     if (attempt < MAX_ATTEMPTS) {
+  //       const backoff = Math.pow(2, attempt) * 1000
+  //       console.log('[JOB] retry agendado', { backoff })
+  //       setTimeout(() => startShipmentPurchaseJob(pedidoId, attempt + 1), backoff)
+  //     } else {
+  //       console.error('[JOB] falha definitiva', { pedidoId })
+  //       try {
+  //         await orderRepo.updateOrderShippingInfo(pedidoId, {
+  //           shipping_status: 'FAILED',
+  //           shipping_metadata: { error: String(err?.message || err) }
+  //         })
+  //       } catch { }
+  //     }
+  //   }
+  // }
+
 
   // Decide how to interpret incomingId to avoid unnecessary MP GETs that return 404.
   // Heuristic:
@@ -532,7 +750,7 @@ export const handleMpNotification = async (body) => {
       // Treat as external_reference / pedidoId: search payments by external_reference
       try {
         const searchUrl = `${MP_BASE}/v1/payments/search?external_reference=${encodeURIComponent(incomingId)}`
-  console.log(`MP: buscando pagamentos por external_reference (search) ${searchUrl} — token: ${maskToken(MP_ACCESS_TOKEN)}`)
+        console.log(`MP: buscando pagamentos por external_reference (search) ${searchUrl} — token: ${maskToken(MP_ACCESS_TOKEN)}`)
         const sres = await fetch(searchUrl, { headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` } })
         if (!sres.ok) {
           const txt = await sres.text().catch(() => '<no-body>')
@@ -629,4 +847,111 @@ export const deletePendingPaymentsOlderThan = async (hours = 24) => {
 export const deletePendingOrdersOlderThan = async (hours = 24) => {
   const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000)
   return orderRepo.deletePendingOrdersOlderThan(cutoff.toISOString())
+}
+
+export const startShipmentPurchaseJob = async (pedidoId, attempt = 0) => {
+  const MAX_ATTEMPTS = 3
+
+  try {
+    const pedido = await orderRepo.getOrderById(pedidoId)
+    if (!pedido) throw new Error('Pedido não encontrado')
+
+    if (!pedido.melhorenvio_shipment_id) {
+      const products = (pedido.itens || []).map(it => ({
+        name: it.nome || 'Produto',
+        quantity: it.quantidade,
+        unitary_value: Number(it.preco || 0),
+        weight: 1,
+        length: 20,
+        height: 10,
+        width: 15,
+        peso: 1,
+        comprimento: 20
+      }))
+
+      const volumes = (pedido.itens || []).map(it => ({
+        weight: 1,
+        length: 20,
+        height: 10,
+        width: 15,
+      }))
+
+      /** 
+       * ATENÇÃO:
+       * service DEVE vir do cálculo de frete.
+       * Aqui estou fixando PAC (1) apenas para não quebrar.
+       */
+      //! Checar se a plataforma irá usar apenas PAC como forma de frete
+      const user = await findUserById(pedido.usuarioId);
+
+      const shipmentPayload = {
+        service: 1,
+        from: {
+          name: process.env.MELHOR_ENVIO_FROM_NAME,
+          phone: process.env.MELHOR_ENVIO_FROM_PHONE,
+          email: process.env.MELHOR_ENVIO_FROM_EMAIL,
+          address: process.env.MELHOR_ENVIO_FROM_ADDRESS,
+          number: process.env.MELHOR_ENVIO_FROM_NUMBER,
+          district: process.env.MELHOR_ENVIO_FROM_DISTRICT,
+          city: process.env.MELHOR_ENVIO_FROM_CITY,
+          state_abbr: process.env.MELHOR_ENVIO_FROM_STATE,
+          postal_code: process.env.MELHOR_ENVIO_FROM_POSTAL_CODE
+        },
+        to: {
+          name: user.nome,
+          phone: pedido.telefone,
+          email: pedido.email,
+          address: pedido.rua,
+          number: pedido.numero,
+          district: pedido.bairro,
+          city: pedido.cidade,
+          state_abbr: pedido.estado,
+          document: "55021568000",
+          postal_code: pedido.cep.replace(/\D/g, '')
+        },
+        products,
+        volumes,
+      }
+
+      const createRes = await shippingService.createShipment(shipmentPayload)
+
+      await orderRepo.updateOrderShippingInfo(pedidoId, {
+        melhorenvio_shipment_id: createRes.id,
+        shipping_metadata: createRes
+      })
+    }
+
+    const freshPedido = await orderRepo.getOrderById(pedidoId)
+    if (!freshPedido?.melhorenvio_shipment_id) {
+      throw new Error('Shipment ID ausente')
+    }
+
+    const purchaseRes = await shippingService.purchaseShipment(
+      freshPedido.melhorenvio_shipment_id
+    )
+
+    await orderRepo.updateOrderShippingInfo(pedidoId, {
+      melhorenvio_purchase_id: purchaseRes.id,
+      tracking_number: purchaseRes.tracking_number || null,
+      label_url: purchaseRes.label_url || null,
+      shipping_status: 'PURCHASED',
+      shipping_metadata: purchaseRes
+    })
+
+  } catch (err) {
+    if (attempt < MAX_ATTEMPTS) {
+      setTimeout(
+        () => startShipmentPurchaseJob(pedidoId, attempt + 1),
+        Math.pow(2, attempt) * 1000
+      )
+      return
+    }
+
+    await orderRepo.updateOrderShippingInfo(pedidoId, {
+      shipping_status: 'FAILED',
+      shipping_metadata: { error: err.message }
+    })
+
+    throw err
+  }
 }

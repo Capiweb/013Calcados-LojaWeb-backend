@@ -122,27 +122,60 @@ export const createShipment = async (shipmentPayload) => {
   return data
 }
 
-export const purchaseShipment = async (shipmentId, purchasePayload = {}) => {
+// export const purchaseShipment = async (shipmentId, purchasePayload = {}) => {
+//   const token = MELHOR_ENVIO_TOKEN
+//   if (!token) throw new Error('Nenhum token Melhor Envio disponível')
+//   const raw = process.env.MELHOR_ENVIO_PURCHASE_URL || MELHOR_ENVIO_PURCHASE_URL
+//   const url = raw.replace('{shipment_id}', shipmentId)
+//   const res = await fetch(url, {
+//     method: 'POST',
+//     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' },
+//     body: JSON.stringify(purchasePayload)
+//   })
+//   const text = await res.text()
+//   let data
+//   try { data = JSON.parse(text) } catch (e) { data = text }
+//   if (!res.ok) {
+//     const err = new Error('purchaseShipment fa  iled')
+//     err.status = res.status
+//     err.body = data
+//     throw err
+//   }
+//   return data
+// }
+
+export const purchaseShipment = async (shipmentId) => {
   const token = MELHOR_ENVIO_TOKEN
   if (!token) throw new Error('Nenhum token Melhor Envio disponível')
-  const raw = process.env.MELHOR_ENVIO_PURCHASE_URL || MELHOR_ENVIO_PURCHASE_URL
-  const url = raw.replace('{shipment_id}', shipmentId)
+
+  const url = process.env.MELHOR_ENVIO_PURCHASE_URL || MELHOR_ENVIO_PURCHASE_URL
+
+  const payload = {
+    orders: [shipmentId]
+  }
+
   const res = await fetch(url, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify(purchasePayload)
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json'
+    },
+    body: JSON.stringify(payload)
   })
-  const text = await res.text()
-  let data
-  try { data = JSON.parse(text) } catch (e) { data = text }
+
+  const data = await res.json()
+
   if (!res.ok) {
     const err = new Error('purchaseShipment failed')
     err.status = res.status
     err.body = data
     throw err
   }
+
   return data
 }
+
 
 export const getShipment = async (shipmentId) => {
   const token = MELHOR_ENVIO_TOKEN
