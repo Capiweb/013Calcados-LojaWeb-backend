@@ -869,12 +869,18 @@ export const startShipmentPurchaseJob = async (pedidoId, attempt = 0) => {
         comprimento: 20
       }))
 
-      const volumes = (pedido.itens || []).map(it => ({
-        weight: 1,
-        length: 20,
-        height: 10,
-        width: 15,
-      }))
+      //! Sem fallback, se não estiver no .env, vai dar erro
+      const ITEM_WEIGHT = Number(process.env.ITEM_WEIGHT);
+      const ITEM_LENGTH = Number(process.env.ITEM_LENGTH);
+      const ITEM_HEIGHT = Number(process.env.ITEM_HEIGHT);
+      const ITEM_WIDTH = Number(process.env.ITEM_WIDTH);
+
+      const volumes = (pedido.itens || []).map(() => ({
+        weight: ITEM_WEIGHT,
+        length: ITEM_LENGTH,
+        height: ITEM_HEIGHT,
+        width: ITEM_WIDTH,
+      }));
 
       /** 
        * ATENÇÃO:
