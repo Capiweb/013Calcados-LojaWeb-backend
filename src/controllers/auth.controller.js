@@ -9,6 +9,11 @@ const isValidEmail = (email) => {
   return emailRegex.test(email);
 };
 
+function isValidCpfCnpj(value) {
+  const cleaned = value.replace(/[.\-\/]/g, ''); // remove pontos, traços e barras
+  return cleaned.length === 11 || cleaned.length === 14; // 11 = CPF, 14 = CNPJ
+}
+
 // Função auxiliar para validar senha (mínimo 6 caracteres)
 const isValidPassword = (senha) => {
   return senha && senha.length >= 6;
@@ -17,12 +22,19 @@ const isValidPassword = (senha) => {
 // Endpoint de registro
 export const register = async (req, res) => {
   try {
-    const { nome, email, senha, confirmarSenha } = req.body;
+    const { nome, email, senha, confirmarSenha, documento } = req.body;
 
     // Validações de campos obrigatórios
-    if (!nome || !email || !senha || !confirmarSenha) {
+    if (!nome || !email || !senha || !confirmarSenha || !documento) {
       return res.status(400).json({
-        error: 'Nome, email, senha e confirmação de senha são obrigatórios',
+        error: 'Nome, email, senha, confirmação de senha e documento são obrigatórios',
+      });
+    }
+
+    // Validar formato do documento
+    if (!isValidCpfCnpj(documento)) {
+      return res.status(400).json({
+        error: 'Documento inválido',
       });
     }
 
@@ -48,7 +60,7 @@ export const register = async (req, res) => {
     }
 
     // Registrar usuário
-    const newUser = await authService.registerUser(nome, email, senha);
+    const newUser = await authService.registerUser(nome, email, senha, documento);
 
     // Retornar resposta de sucesso sem dados sensíveis
     return res.status(201).json({
