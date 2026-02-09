@@ -158,8 +158,11 @@ model Pedido {
   criadoEm                DateTime     @default(now())
   atualizadoEm            DateTime     @updatedAt
   label_url               String?
+
   melhorenvio_purchase_id String?
   melhorenvio_shipment_id String?
+  melhorenvio_service_id  Int?
+
   shipping_metadata       Json?
   shipping_status         String?
   tracking_number         String?
