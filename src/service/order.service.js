@@ -912,7 +912,7 @@ export const startShipmentPurchaseJob = async (pedidoId, attempt = 0) => {
           district: pedido.bairro,
           city: pedido.cidade,
           state_abbr: pedido.estado,
-          document: "55021568000",
+          document: user.documento,
           postal_code: pedido.cep.replace(/\D/g, '')
         },
         products,
