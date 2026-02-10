@@ -24,8 +24,8 @@ export const calculateShipping = async (payload, userId = null) => {
     // If caller provided origin_postal_code/destination_postal_code use from/to shape required by /v2/me/shipment/calculate
     let bodyToSend = payload
     try {
-      if (payload && (payload.origin_postal_code || payload.destination_postal_code || payload.items || payload.products)) {
-        const fromPostal = payload.origin_postal_code || payload.from?.postal_code || payload.from_postal_code
+      if (payload && (payload.destination_postal_code || payload.items || payload.products)) {
+        const fromPostal = process.env.MELHOR_ENVIO_FROM_POSTAL_CODE;
         const toPostal = payload.destination_postal_code || payload.to?.postal_code || payload.to_postal_code
         const sourceItems = Array.isArray(payload.items) ? payload.items : (Array.isArray(payload.items) ? payload.items : [])
 

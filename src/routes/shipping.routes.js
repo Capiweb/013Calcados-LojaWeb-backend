@@ -27,7 +27,6 @@ const router = express.Router()
  *               quantity:
  *                 type: number
  *             example:
- *               origin_postal_code: '01000-000'
  *               destination_postal_code: '02000-000'
  *               items:
  *                 - quantity: 1
