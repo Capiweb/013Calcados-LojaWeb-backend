@@ -220,6 +220,7 @@ router.delete('/user/:userId', authMiddleware, orderController.deleteAllUserOrde
 // Observação: endpoint PUT /api/orders/{id}/freight foi removido. O valor do frete deve ser enviado
 // no corpo da requisição POST /api/orders/checkout como { "frete": number }.
 
+
 /**
  * @swagger
  * /api/orders/payments/{pagamentoId}:
@@ -271,5 +272,39 @@ router.delete('/payments/:pagamentoId', authMiddleware, orderController.deletePa
  *         description: Não autorizado
  */
 router.delete('/payments/user/:userId', authMiddleware, orderController.deleteAllPaymentsForUser)
+
+/**
+ * @swagger
+ * /api/orders/{id}/freight:
+ *   post:
+ *     summary: Adicionar frete ao total do pedido
+ *     tags:
+ *       - Pedidos
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               frete:
+ *                 type: number
+ *     responses:
+ *       200:
+ *         description: Pedido atualizado com novo total
+ *       400:
+ *         description: Valor inválido ou pedido não pendente
+ *       404:
+ *         description: Pedido não encontrado
+ */
+router.post('/:id/freight', authMiddleware, orderController.addFreight)
 
 export default router

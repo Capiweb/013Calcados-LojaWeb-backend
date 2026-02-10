@@ -335,3 +335,22 @@ export const deleteAllPaymentsForUser = async (req, res) => {
     return res.status(500).json({ error: 'Erro ao deletar pagamentos do usuário' })
   }
 }
+
+export const addFreight = async (req, res) => {
+  try {
+    const { id } = req.params
+    const { frete } = req.body
+
+    if (frete === undefined || frete === null || isNaN(Number(frete))) {
+      return res.status(400).json({ error: 'Valor do frete inválido' })
+    }
+
+    const order = await orderService.addFreightToOrder(id, Number(frete))
+    return res.status(200).json(order)
+  } catch (error) {
+    console.error('addFreight error:', error)
+    if (String(error.message).includes('Pedido não encontrado')) return res.status(404).json({ error: 'Pedido não encontrado' })
+    if (String(error.message).includes('não está pendente')) return res.status(400).json({ error: error.message })
+    return res.status(500).json({ error: 'Erro ao adicionar frete ao pedido' })
+  }
+}

@@ -971,3 +971,15 @@ export const startShipmentPurchaseJob = async (pedidoId, attempt = 0) => {
     throw err
   }
 }
+
+export const addFreightToOrder = async (orderId, freteValue) => {
+  const order = await orderRepo.getOrderById(orderId)
+  if (!order) throw new Error('Pedido não encontrado')
+
+  const currentTotal = Number(order.total)
+  const newTotal = currentTotal + Number(freteValue)
+
+  await orderRepo.updateOrderTotal(orderId, newTotal)
+
+  return orderRepo.getOrderById(orderId)
+}
