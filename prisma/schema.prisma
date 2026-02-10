@@ -7,220 +7,11 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/// *
-/// * =======================
-/// * USUÁRIO
-/// * =======================
-model Usuario {
-  id           String       @id @default(uuid())
-  nome         String
-  
-  documento    String @unique
-
-  email        String       @unique
-  senha        String
-  papel        PapelUsuario @default(USUARIO)
-  criadoEm     DateTime     @default(now())
-  atualizadoEm DateTime     @updatedAt
-  carrinho     Carrinho?
-  enderecos    Endereco[]
-  favoritos    Favorito[]
-  feedbacks    Feedback[]
-  pedidos      Pedido[]
-}
-
-model Favorito {
-  id        String   @id @default(uuid())
-  usuarioId String
-  produtoId String
-  criadoEm  DateTime @default(now())
-  produto   Produto  @relation(fields: [produtoId], references: [id], onDelete: Cascade)
-  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-
-  @@unique([usuarioId, produtoId])
-}
-
-/// *
-/// * =======================
-/// * ENDEREÇO
-/// * =======================
-model Endereco {
-  id          String   @id @default(uuid())
-  usuarioId   String
-  rua         String
-  numero      String
-  complemento String?
-  bairro      String
-  cidade      String
-  estado      String
-  cep         String
-  criadoEm    DateTime @default(now())
-  usuario     Usuario  @relation(fields: [usuarioId], references: [id])
-}
-
-/// *
-/// * =======================
-/// * CATEGORIA
-/// * =======================
-model Categoria {
-  id       String    @id @default(uuid())
-  nome     String
-  slug     String    @unique
-  criadoEm DateTime  @default(now())
-  produtos Produto[]
-}
-
-/// *
-/// * =======================
-/// * PRODUTO
-/// * =======================
-model Produto {
-  id               String            @id @default(uuid())
-  nome             String
-  descricao        String
-  preco            Decimal           @db.Decimal(10, 2)
-  emPromocao       Boolean           @default(false)
-  precoPromocional Decimal?          @db.Decimal(10, 2)
-  slug             String            @unique
-  imagemUrl        String
-  categoriaId      String
-  criadoEm         DateTime          @default(now())
-  atualizadoEm     DateTime          @updatedAt
-  estrelas         Float             @default(0)
-  imagemPublicId   String?
-  favoritos        Favorito[]
-  feedbacks        Feedback[]
-  categoria        Categoria         @relation(fields: [categoriaId], references: [id])
-  variacoes        ProdutoVariacao[]
-}
-
-/// *
-/// * =======================
-/// * VARIAÇÃO DO PRODUTO (TAMANHO)
-/// * =======================
-model ProdutoVariacao {
-  id            String         @id @default(uuid())
-  produtoId     String
-  tipoTamanho   TipoTamanho
-  tamanho       String
-  estoque       Int
-  sku           String         @unique
-  criadoEm      DateTime       @default(now())
-  cores         String[]
-  itensCarrinho CarrinhoItem[]
-  itensPedido   PedidoItem[]
-  produto       Produto        @relation(fields: [produtoId], references: [id], onDelete: Cascade)
-}
-
-/// *
-/// * =======================
-/// * CARRINHO
-/// * =======================
-model Carrinho {
-  id           String         @id @default(uuid())
-  usuarioId    String         @unique
-  criadoEm     DateTime       @default(now())
-  atualizadoEm DateTime       @updatedAt
-  usuario      Usuario        @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  itens        CarrinhoItem[]
-}
-
-/// *
-/// * =======================
-/// * ITEM DO CARRINHO
-/// * =======================
-model CarrinhoItem {
-  id                String          @id @default(uuid())
-  quantidade        Int
-  carrinhoId        String
-  produtoVariacaoId String
-  criadoEm          DateTime        @default(now())
-  carrinho          Carrinho        @relation(fields: [carrinhoId], references: [id])
-  produtoVariacao   ProdutoVariacao @relation(fields: [produtoVariacaoId], references: [id], onDelete: Cascade)
-}
-
-/// *
-/// * =======================
-/// * PEDIDO
-/// * =======================
-model Pedido {
-  id                      String       @id @default(uuid())
-  usuarioId               String
-  status                  StatusPedido @default(PENDENTE)
-  total                   Decimal      @db.Decimal(10, 2)
-  rua                     String
-  numero                  String
-  complemento             String?
-  bairro                  String
-  cidade                  String
-  estado                  String
-  cep                     String
-  criadoEm                DateTime     @default(now())
-  atualizadoEm            DateTime     @updatedAt
-  label_url               String?
-
-  melhorenvio_purchase_id String?
-  melhorenvio_shipment_id String?
-  melhorenvio_service_id  Int?
-
-  shipping_metadata       Json?
-  shipping_status         String?
-  tracking_number         String?
-  pagamento               Pagamento?
-  usuario                 Usuario      @relation(fields: [usuarioId], references: [id])
-  itens                   PedidoItem[]
-}
-
-/// *
-/// * =======================
-/// * ITEM DO PEDIDO
-/// * =======================
-model PedidoItem {
-  id                String          @id @default(uuid())
-  quantidade        Int
-  preco             Decimal         @db.Decimal(10, 2)
-  pedidoId          String
-  produtoVariacaoId String
-  pedido            Pedido          @relation(fields: [pedidoId], references: [id])
-  produtoVariacao   ProdutoVariacao @relation(fields: [produtoVariacaoId], references: [id], onDelete: Cascade)
-}
-
-/// *
-/// * =======================
-/// * PAGAMENTO
-/// * =======================
-model Pagamento {
-  id          String          @id @default(uuid())
-  pedidoId    String          @unique
-  provedor    String
-  pagamentoId String
-  status      StatusPagamento
-  criadoEm    DateTime        @default(now())
-  pedido      Pedido          @relation(fields: [pedidoId], references: [id])
-}
-
-/// *
-/// * =======================
-/// * FEEDBACK / AVALIAÇÃO
-/// * =======================
-model Feedback {
-  id           String   @id @default(uuid())
-  usuarioId    String
-  produtoId    String
-  estrelas     Float
-  comentario   String?
-  criadoEm     DateTime @default(now())
-  atualizadoEm DateTime @updatedAt
-  produto      Produto  @relation(fields: [produtoId], references: [id])
-  usuario      Usuario  @relation(fields: [usuarioId], references: [id])
-
-  @@unique([usuarioId, produtoId])
-}
-
-/// *
-/// * =======================
-/// * ENUMS
-/// * =======================
+/**
+ * =======================
+ * ENUMS
+ * =======================
+ */
 enum PapelUsuario {
   USUARIO
   ADMIN
@@ -242,6 +33,267 @@ enum StatusPagamento {
 }
 
 enum TipoTamanho {
-  NUMERICO
-  LETRA
+  NUMERICO // tênis: 39, 40, 41...
+  LETRA // roupas: P, M, G, GG
+}
+
+/**
+ * =======================
+ * USUÁRIO
+ * =======================
+ */
+model Usuario {
+  id    String       @id @default(uuid())
+  nome  String
+  email String       @unique
+  senha String
+  papel PapelUsuario @default(USUARIO)
+
+  documento String @unique
+
+  carrinho  Carrinho?
+  pedidos   Pedido[]
+  enderecos Endereco[]
+  favoritos Favorito[]
+  feedbacks Feedback[]
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+}
+
+/**
+ * Nota: a tabela de favoritos é um relacionamento many-to-many entre Usuario e Produto.
+ * Usamos aqui um relacionamento implícito (Prisma cria a tabela de junção automaticamente).
+ */
+
+model Favorito {
+  id        String   @id @default(uuid())
+  usuarioId String
+  produtoId String
+  criadoEm  DateTime @default(now())
+
+  // Relacionamentos
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  produto Produto @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+
+  // Garante que o usuário não favorite o mesmo produto mais de uma vez [1]
+  @@unique([usuarioId, produtoId])
+}
+
+/**
+ * =======================
+ * ENDEREÇO
+ * =======================
+ */
+model Endereco {
+  id        String  @id @default(uuid())
+  usuarioId String
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
+
+  rua         String
+  numero      String
+  complemento String?
+  bairro      String
+  cidade      String
+  estado      String
+  cep         String
+
+  criadoEm DateTime @default(now())
+}
+
+/**
+ * =======================
+ * CATEGORIA
+ * =======================
+ */
+model Categoria {
+  id   String @id @default(uuid())
+  nome String
+  slug String @unique
+
+  produtos Produto[]
+
+  criadoEm DateTime @default(now())
+}
+
+/**
+ * =======================
+ * PRODUTO
+ * =======================
+ */
+model Produto {
+  id        String @id @default(uuid())
+  nome      String
+  descricao String
+
+  preco            Decimal  @db.Decimal(10, 2) // preço original
+  emPromocao       Boolean  @default(false)
+  precoPromocional Decimal? @db.Decimal(10, 2) // só existe se emPromocao = true ==> criar regra no backend
+
+  slug      String @unique
+  imagemUrl String
+  imagemPublicId String?
+  estrelas  Float  @default(0) // média de avaliações (0.5, 1.0, 1.5, ..., 5.0, 5.5)
+
+  categoriaId String
+  categoria   Categoria @relation(fields: [categoriaId], references: [id])
+
+  variacoes ProdutoVariacao[]
+  favoritos Favorito[]
+  feedbacks Feedback[]
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+}
+
+/**
+ * =======================
+ * VARIAÇÃO DO PRODUTO (TAMANHO)
+ * =======================
+ */
+model ProdutoVariacao {
+  id        String  @id @default(uuid())
+  produtoId String
+  produto   Produto @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+
+  tipoTamanho TipoTamanho
+  tamanho     String // "39", "41", "M", "GG"
+  estoque     Int
+  cores       String[]
+  sku         String      @unique
+
+  itensCarrinho CarrinhoItem[]
+  itensPedido   PedidoItem[]
+
+  criadoEm DateTime @default(now())
+}
+
+/**
+ * =======================
+ * CARRINHO
+ * =======================
+ */
+model Carrinho {
+  id        String  @id @default(uuid())
+  usuarioId String  @unique
+  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  itens CarrinhoItem[]
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+}
+
+/**
+ * =======================
+ * ITEM DO CARRINHO
+ * =======================
+ */
+model CarrinhoItem {
+  id         String @id @default(uuid())
+  quantidade Int
+
+  carrinhoId String
+  carrinho   Carrinho @relation(fields: [carrinhoId], references: [id])
+
+  produtoVariacaoId String
+  produtoVariacao   ProdutoVariacao @relation(fields: [produtoVariacaoId], references: [id], onDelete: Cascade)
+
+  criadoEm DateTime @default(now())
+}
+
+/**
+ * =======================
+ * PEDIDO
+ * =======================
+ */
+model Pedido {
+  id        String  @id @default(uuid())
+  usuarioId String
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
+
+  status StatusPedido @default(PENDENTE)
+  total  Decimal      @db.Decimal(10, 2)
+
+  // Endereço congelado no pedido
+  rua         String
+  numero      String
+  complemento String?
+  bairro      String
+  cidade      String
+  estado      String
+  cep         String
+
+  itens     PedidoItem[]
+  pagamento Pagamento?
+
+  // Melhor Envio integration fields
+  melhorenvio_shipment_id String?
+  melhorenvio_purchase_id String?
+  melhorenvio_service_id  Int?
+  tracking_number         String?
+  label_url               String?
+  shipping_status         String?
+  shipping_metadata       Json?
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+}
+
+/**
+ * =======================
+ * ITEM DO PEDIDO
+ * =======================
+ */
+model PedidoItem {
+  id         String  @id @default(uuid())
+  quantidade Int
+  preco      Decimal @db.Decimal(10, 2)
+
+  pedidoId String
+  pedido   Pedido @relation(fields: [pedidoId], references: [id])
+
+  produtoVariacaoId String
+  produtoVariacao   ProdutoVariacao @relation(fields: [produtoVariacaoId], references: [id], onDelete: Cascade)
+}
+
+/**
+ * =======================
+ * PAGAMENTO
+ * =======================
+ */
+model Pagamento {
+  id       String @id @default(uuid())
+  pedidoId String @unique
+  pedido   Pedido @relation(fields: [pedidoId], references: [id])
+
+  provedor    String // mercado_pago
+  pagamentoId String // ID do pagamento no Mercado Pago
+  status      StatusPagamento
+
+  criadoEm DateTime @default(now())
+}
+
+/**
+ * =======================
+ * FEEDBACK / AVALIAÇÃO
+ * =======================
+ */
+model Feedback {
+  id String @id @default(uuid())
+
+  usuarioId String
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
+
+  produtoId String
+  produto   Produto @relation(fields: [produtoId], references: [id])
+
+  estrelas   Float @default(0.0)
+  comentario String? // comentário opcional
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  // Garantir que um usuário não pode avaliar o mesmo produto mais de uma vez
+  @@unique([usuarioId, produtoId])
 }
