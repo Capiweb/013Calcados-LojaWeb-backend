@@ -43,7 +43,7 @@ export const removeItemFromCart = async (itemId) => {
   return cartRepo.removeCartItem(itemId)
 }
 
-export const createOrderFromCart = async (userId, endereco, frete = 0, melhorenvio_service_id = null) => {
+export const createOrderFromCart = async (userId, endereco, frete = 0, melhorenvio_service_id) => {
   const cart = await cartRepo.getCartWithItems(userId)
   if (!cart || !cart.itens || cart.itens.length === 0) throw new Error('Carrinho vazio')
 
@@ -138,6 +138,7 @@ export const createOrderFromCart = async (userId, endereco, frete = 0, melhorenv
     cidade: endereco.cidade,
     estado: endereco.estado,
     cep: endereco.cep,
+    melhorenvio_service_id
   })
 
   // criar itens do pedido
