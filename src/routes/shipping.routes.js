@@ -24,19 +24,17 @@ const router = express.Router()
  *                 type: string
  *               destination_postal_code:
  *                 type: string
- *               items:
- *                 type: array
- *                 items:
- *                   type: object
+ *               quantity:
+ *                 type: number
  *             example:
  *               origin_postal_code: '01000-000'
  *               destination_postal_code: '02000-000'
  *               items:
- *                 - weight: 1000
- *                   length: 20
- *                   height: 10
- *                   width: 15
- *                   quantity: 1
+ *                 - quantity: 1
+ *                   insurance_value: 100
+ *                 - quantity: 2
+ *                   insurance_value: 200
+
  *     responses:
  *       200:
  *         description: Resultado do cálculo de frete

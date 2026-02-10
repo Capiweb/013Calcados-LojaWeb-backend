@@ -5,6 +5,7 @@ export const RegisterSchema = z.object({
   email: z.string().email('Email inválido'),
   senha: z.string().min(6, 'A senha deve ter no mínimo 6 caracteres'),
   confirmarSenha: z.string().min(6, 'A confirmação de senha é obrigatória'),
+  documento: z.string().min(1, 'Documento é obrigatório'),
 })
 
 export const LoginSchema = z.object({

@@ -8,10 +8,10 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
 
 // Função para registrar um novo usuário
-export const registerUser = async (nome, email, senha) => {
+export const registerUser = async (nome, email, senha, documento) => {
   // Verificar se o email já está cadastrado
   const existingUser = await userRepository.findUserByEmail(email);
-  
+
   if (existingUser) {
     throw new Error('Email já está em uso');
   }
@@ -24,6 +24,7 @@ export const registerUser = async (nome, email, senha) => {
     nome,
     email,
     senha: hashedPassword,
+    documento,
   });
 
   // Retornar dados sem informações sensíveis
@@ -38,14 +39,14 @@ export const registerUser = async (nome, email, senha) => {
 export const loginUser = async (email, senha) => {
   // Buscar usuário por email
   const user = await userRepository.findUserByEmail(email);
-  
+
   if (!user) {
     throw new Error('Email inválido');
   }
 
   // Comparar senha informada com o hash salvo
   const isPasswordValid = await bcrypt.compare(senha, user.senha);
-  
+
   if (!isPasswordValid) {
     throw new Error('Senha inválida');
   }
@@ -76,7 +77,7 @@ export const loginUser = async (email, senha) => {
 // Função para buscar usuário por ID
 export const getUserById = async (userId) => {
   const user = await userRepository.findUserById(userId);
-  
+
   if (!user) {
     throw new Error('Usuário não encontrado');
   }

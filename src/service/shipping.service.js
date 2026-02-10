@@ -27,23 +27,34 @@ export const calculateShipping = async (payload, userId = null) => {
       if (payload && (payload.origin_postal_code || payload.destination_postal_code || payload.items || payload.products)) {
         const fromPostal = payload.origin_postal_code || payload.from?.postal_code || payload.from_postal_code
         const toPostal = payload.destination_postal_code || payload.to?.postal_code || payload.to_postal_code
+        const sourceItems = Array.isArray(payload.items) ? payload.items : (Array.isArray(payload.items) ? payload.items : [])
 
         // build products array from items or products
-        const sourceProducts = Array.isArray(payload.products) ? payload.products : (Array.isArray(payload.items) ? payload.items : [])
-        const products = sourceProducts.map(i => {
-          // normalize numeric fields
-          const rawWeight = Number(i.weight || 0)
-          // if weight looks like grams (>=1000), convert to kg
-          const weightKg = rawWeight >= 1000 ? Number((rawWeight / 1000).toFixed(3)) : rawWeight
-          return {
-            weight: weightKg,
-            length: Number(i.length || i.l || 0),
-            height: Number(i.height || i.h || 0),
-            width: Number(i.width || i.w || 0),
-            quantity: Number(i.quantity || 1),
-            insurance_value: Number(i.insurance_value || i.insuranceValue || 0)
-          }
-        })
+        // const sourceProducts = Array.isArray(payload.products) ? payload.products : (Array.isArray(payload.items) ? payload.items : [])
+        // const products = sourceProducts.map(i => {
+        //   // normalize numeric fields
+        //   const rawWeight = Number(i.weight || 0)
+        //   // if weight looks like grams (>=1000), convert to kg
+        //   const weightKg = rawWeight >= 1000 ? Number((rawWeight / 1000).toFixed(3)) : rawWeight
+        //   return {
+        //     weight: weightKg,
+        //     length: Number(i.length || i.l || 0),
+        //     height: Number(i.height || i.h || 0),
+        //     width: Number(i.width || i.w || 0),
+        //     quantity: Number(i.quantity || 1),
+        //     insurance_value: Number(i.insurance_value || i.insuranceValue || 0)
+        //   }
+        // })
+
+        const products = sourceItems.flatMap(item => {
+          return Array.from({ length: item.quantity }, () => ({
+            weight: Number(process.env.ITEM_WEIGHT),
+            length: Number(process.env.ITEM_LENGTH),
+            height: Number(process.env.ITEM_HEIGHT),
+            width: Number(process.env.ITEM_WIDTH),
+            insurance_value: Number(item.insurance_value)
+          }));
+        });
 
         // sanitize postal codes: remove non-digits
         const sanitizeCEP = (s) => String(s || '').replace(/\D/g, '')
@@ -73,20 +84,31 @@ export const calculateShipping = async (payload, userId = null) => {
       console.warn('shipping.calculateShipping mapping warning:', mapError?.message || mapError)
     }
 
+    const userAgent = `${process.env.MELHOR_ENVIO_FROM_NAME} (${process.env.MELHOR_ENVIO_FROM_EMAIL})`;
+
     const res = await fetch(url, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
         Accept: 'application/json',
-        'User-Agent': '013calcados (contato@seusite.com)'
+        'User-Agent': userAgent
       },
       body: JSON.stringify(bodyToSend)
     })
 
     const text = await res.text()
-    let data
-    try { data = JSON.parse(text) } catch (e) { data = text }
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      data = text;
+    }
+
+    // garante que é array antes de filtrar
+    if (Array.isArray(data)) {
+      data = data.filter(carrier => !carrier.error);
+    }
 
     if (!res.ok) {
       const err = new Error('Melhor Envio returned non-OK')
@@ -122,27 +144,62 @@ export const createShipment = async (shipmentPayload) => {
   return data
 }
 
-export const purchaseShipment = async (shipmentId, purchasePayload = {}) => {
+// export const purchaseShipment = async (shipmentId, purchasePayload = {}) => {
+//   const token = MELHOR_ENVIO_TOKEN
+//   if (!token) throw new Error('Nenhum token Melhor Envio disponível')
+//   const raw = process.env.MELHOR_ENVIO_PURCHASE_URL || MELHOR_ENVIO_PURCHASE_URL
+//   const url = raw.replace('{shipment_id}', shipmentId)
+//   const res = await fetch(url, {
+//     method: 'POST',
+//     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' },
+//     body: JSON.stringify(purchasePayload)
+//   })
+//   const text = await res.text()
+//   let data
+//   try { data = JSON.parse(text) } catch (e) { data = text }
+//   if (!res.ok) {
+//     const err = new Error('purchaseShipment fa  iled')
+//     err.status = res.status
+//     err.body = data
+//     throw err
+//   }
+//   return data
+// }
+
+export const purchaseShipment = async (shipmentId) => {
   const token = MELHOR_ENVIO_TOKEN
   if (!token) throw new Error('Nenhum token Melhor Envio disponível')
-  const raw = process.env.MELHOR_ENVIO_PURCHASE_URL || MELHOR_ENVIO_PURCHASE_URL
-  const url = raw.replace('{shipment_id}', shipmentId)
+
+  const url = process.env.MELHOR_ENVIO_PURCHASE_URL || MELHOR_ENVIO_PURCHASE_URL
+
+  const payload = {
+    orders: [shipmentId]
+  }
+
   const res = await fetch(url, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify(purchasePayload)
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json'
+    },
+    body: JSON.stringify(payload)
   })
+
   const text = await res.text()
   let data
   try { data = JSON.parse(text) } catch (e) { data = text }
+
   if (!res.ok) {
     const err = new Error('purchaseShipment failed')
     err.status = res.status
     err.body = data
     throw err
   }
+
   return data
 }
+
 
 export const getShipment = async (shipmentId) => {
   const token = MELHOR_ENVIO_TOKEN

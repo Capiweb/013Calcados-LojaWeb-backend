@@ -100,9 +100,11 @@ export const checkout = async (req, res) => {
     // Create pedido in DB from cart (freeze address) before creating preference
     // Accept optional frete in body and forward to service
     const frete = req.body?.frete == null ? undefined : Number(req.body.frete)
+    const melhorenvio_service_id = req.body?.melhorenvio_service_id == null ? undefined : Number(req.body.melhorenvio_service_id)
+
     let pedido
     try {
-      pedido = await orderService.createOrderFromCart(userId, endereco || {}, frete)
+      pedido = await orderService.createOrderFromCart(userId, endereco || {}, frete, melhorenvio_service_id)
     } catch (e) {
       console.error('Erro ao criar pedido:', e)
       return res.status(500).json({ error: 'Erro ao criar pedido' })
@@ -183,7 +185,7 @@ export const checkout = async (req, res) => {
     }
 
     // Debug: log MP body (avoid logging secrets)
-    try { console.log('MP preference request body:', JSON.stringify(mpBody)) } catch (e) {}
+    try { console.log('MP preference request body:', JSON.stringify(mpBody)) } catch (e) { }
 
     const mpRes = await fetch('https://api.mercadopago.com/checkout/preferences', {
       method: 'POST',
@@ -205,7 +207,7 @@ export const checkout = async (req, res) => {
 
     const data = JSON.parse(txt)
     // Debug log preference id and init_point
-    try { console.log(`MP preference response: preference_id=${data.id || data.preference_id} init_point=${data.init_point || data.sandbox_init_point} x-request-id=${xRequestId}`) } catch (e) {}
+    try { console.log(`MP preference response: preference_id=${data.id || data.preference_id} init_point=${data.init_point || data.sandbox_init_point} x-request-id=${xRequestId}`) } catch (e) { }
 
     const resp = { url: data.init_point, preference: data, pedidoId: pedido?.id }
     if (xRequestId) resp.xRequestId = xRequestId

@@ -104,6 +104,8 @@ router.delete('/cart/items/:id', authMiddleware, orderController.removeItem)
  *           schema:
  *             type: object
  *             properties:
+ *               melhorenvio_service_id:
+ *                 type: number 
  *               endereco:
  *                 type: object
  *     responses:

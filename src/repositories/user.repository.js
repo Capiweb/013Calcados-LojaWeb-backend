@@ -32,6 +32,7 @@ export const findUserById = async (id) => {
       nome: true,
       email: true,
       papel: true,
+      documento: true,
     },
   });
 };

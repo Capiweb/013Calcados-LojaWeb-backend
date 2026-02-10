@@ -160,6 +160,12 @@ const options = {
               example: 'João Silva',
               minLength: 3,
             },
+            documento: {
+              type: 'string',
+              description: 'Documento do usuário',
+              example: '1234567890',
+              minLength: 11,
+            },
             email: {
               type: 'string',
               format: 'email',
