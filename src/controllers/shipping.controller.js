@@ -22,7 +22,8 @@ export const calculate = async (req, res) => {
     } else {
       if (!payload.destination_postal_code) return res.status(400).json({ error: 'destination_postal_code required' })
       if (!payload.origin_postal_code) return res.status(400).json({ error: 'origin_postal_code required' })
-      if (!payload.items || !Array.isArray(payload.items) || payload.items.length === 0) return res.status(400).json({ error: 'items required' })
+      // if (!payload.items || !Array.isArray(payload.items) || payload.items.length === 0) return res.status(400).json({ error: 'items required' })
+      if (payload.quantity <= 0) return res.status(400).json({ error: 'quantity required' })
     }
 
     const result = await shippingService.calculateShipping(payload)
