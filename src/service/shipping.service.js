@@ -84,13 +84,15 @@ export const calculateShipping = async (payload, userId = null) => {
       console.warn('shipping.calculateShipping mapping warning:', mapError?.message || mapError)
     }
 
+    const userAgent = `${process.env.MELHOR_ENVIO_FROM_NAME} (${process.env.MELHOR_ENVIO_FROM_EMAIL})`;
+
     const res = await fetch(url, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
         Accept: 'application/json',
-        'User-Agent': '013calcados (contato@seusite.com)'
+        'User-Agent': userAgent
       },
       body: JSON.stringify(bodyToSend)
     })
