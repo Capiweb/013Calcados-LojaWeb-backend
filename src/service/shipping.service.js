@@ -186,7 +186,9 @@ export const purchaseShipment = async (shipmentId) => {
     body: JSON.stringify(payload)
   })
 
-  const data = await res.json()
+  const text = await res.text()
+  let data
+  try { data = JSON.parse(text) } catch (e) { data = text }
 
   if (!res.ok) {
     const err = new Error('purchaseShipment failed')
