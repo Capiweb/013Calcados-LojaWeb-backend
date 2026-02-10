@@ -43,9 +43,11 @@ export const removeItemFromCart = async (itemId) => {
   return cartRepo.removeCartItem(itemId)
 }
 
-export const createOrderFromCart = async (userId, endereco, frete = 0) => {
+export const createOrderFromCart = async (userId, endereco, frete = 0, melhorenvio_service_id = null) => {
   const cart = await cartRepo.getCartWithItems(userId)
   if (!cart || !cart.itens || cart.itens.length === 0) throw new Error('Carrinho vazio')
+
+  if (!melhorenvio_service_id) throw new Error('É preciso selecionar um serviço de entrega')
 
   // normalize frete value for use in both create and reuse flows
   const freteValue = Number(frete || 0)
@@ -91,6 +93,13 @@ export const createOrderFromCart = async (userId, endereco, frete = 0) => {
         } catch (e) {
           console.warn('createOrderFromCart: falha ao atualizar total com frete para pedido pendente', e?.message || e)
         }
+
+        try {
+          await orderRepo.updateOrderShipping(existingPending.id, melhorenvio_service_id)
+        } catch (e) {
+          console.warn('createOrderFromCart: falha ao atualizar frete para pedido pendente', e?.message || e)
+        }
+
         const full = await orderRepo.getOrderById(existingPending.id)
         // attach frete to returned object so controller will include it in MP preference
         return { ...full, frete: freteValue }
@@ -891,7 +900,7 @@ export const startShipmentPurchaseJob = async (pedidoId, attempt = 0) => {
       const user = await findUserById(pedido.usuarioId);
 
       const shipmentPayload = {
-        service: 1,
+        service: pedido.melhorenvio_service_id,
         from: {
           name: process.env.MELHOR_ENVIO_FROM_NAME,
           phone: process.env.MELHOR_ENVIO_FROM_PHONE,
