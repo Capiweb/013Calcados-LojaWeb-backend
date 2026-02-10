@@ -3,6 +3,7 @@ import * as enderecoService from '../service/endereco.service.js'
 import { EnderecoSchema } from '../validators/order.validator.js'
 import * as userService from '../service/user.js'
 import fetch from 'node-fetch'
+import shippingService from '../service/shipping.service.js'
 
 export const getCart = async (req, res) => {
   try {
@@ -99,7 +100,10 @@ export const checkout = async (req, res) => {
 
     // Create pedido in DB from cart (freeze address) before creating preference
     // Accept optional frete in body and forward to service
-    const frete = req.body?.frete == null ? undefined : Number(req.body.frete)
+    // const frete = req.body?.frete == null ? undefined : Number(req.body.frete)
+    const fretes = await shippingService.calculateShipping(userId, endereco.cep);
+    const frete = fretes.find((f) => f.id === req.body?.melhorenvio_service_id);
+
     const melhorenvio_service_id = req.body?.melhorenvio_service_id == null ? undefined : Number(req.body.melhorenvio_service_id)
 
     let pedido
