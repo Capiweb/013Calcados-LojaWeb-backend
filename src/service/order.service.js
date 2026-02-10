@@ -43,14 +43,24 @@ export const removeItemFromCart = async (itemId) => {
   return cartRepo.removeCartItem(itemId)
 }
 
+//endereco.cep
 export const createOrderFromCart = async (userId, endereco, frete = 0, melhorenvio_service_id) => {
   const cart = await cartRepo.getCartWithItems(userId)
   if (!cart || !cart.itens || cart.itens.length === 0) throw new Error('Carrinho vazio')
 
   if (!melhorenvio_service_id) throw new Error('É preciso selecionar um serviço de entrega')
 
-  // normalize frete value for use in both create and reuse flows
-  const freteValue = Number(frete || 0)
+  // Calculate shipping using Melhor Envio
+  // The service now fetches the cart internally using userId and uses the destination postal code
+  const shippingOptions = await shippingService.calculateShipping(userId, endereco.cep)
+  const selectedOption = shippingOptions.find(opt => opt.id === melhorenvio_service_id)
+
+  if (!selectedOption) {
+    throw new Error(`Serviço de entrega inválido ou indisponível (ID: ${melhorenvio_service_id})`)
+  }
+
+  // normalize frete value from selected option
+  const freteValue = Number(selectedOption.price || 0)
 
   // If a pending order already exists for this user, reuse it instead of creating a new one
   const existingPending = await orderRepo.findPendingOrderByUserId(userId)

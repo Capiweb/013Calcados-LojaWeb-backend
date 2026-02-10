@@ -13,75 +13,50 @@ const mask = (t = '') => (t ? `${String(t).slice(0, 6)}...` : '<missing>')
 // Note: this service uses the access token provided directly in .env (MELHOR_ENVIO_TOKEN).
 // OAuth exchange functions and per-user tokens were removed to avoid generating tokens programmatically.
 
-export const calculateShipping = async (payload, userId = null) => {
+import * as cartRepo from '../repositories/cart.repository.js'
+
+export const calculateShipping = async (userId, postalCode) => {
   // Use the access token provided in .env
   const token = MELHOR_ENVIO_TOKEN
   if (!token) throw new Error('Nenhum token Melhor Envio disponível. Conecte sua conta via /api/shipping/authorize')
 
   const url = MELHOR_ENVIO_CALCULATE_URL
   try {
-    // Melhor Envio expects different shapes depending on endpoint.
-    // If caller provided origin_postal_code/destination_postal_code use from/to shape required by /v2/me/shipment/calculate
-    let bodyToSend = payload
-    try {
-      if (payload && (payload.destination_postal_code || payload.items || payload.products)) {
-        const fromPostal = process.env.MELHOR_ENVIO_FROM_POSTAL_CODE;
-        const toPostal = payload.destination_postal_code || payload.to?.postal_code || payload.to_postal_code
-        const sourceItems = Array.isArray(payload.items) ? payload.items : (Array.isArray(payload.items) ? payload.items : [])
+    const cart = await cartRepo.getCartWithItems(userId)
+    const items = cart?.itens || []
 
-        // build products array from items or products
-        // const sourceProducts = Array.isArray(payload.products) ? payload.products : (Array.isArray(payload.items) ? payload.items : [])
-        // const products = sourceProducts.map(i => {
-        //   // normalize numeric fields
-        //   const rawWeight = Number(i.weight || 0)
-        //   // if weight looks like grams (>=1000), convert to kg
-        //   const weightKg = rawWeight >= 1000 ? Number((rawWeight / 1000).toFixed(3)) : rawWeight
-        //   return {
-        //     weight: weightKg,
-        //     length: Number(i.length || i.l || 0),
-        //     height: Number(i.height || i.h || 0),
-        //     width: Number(i.width || i.w || 0),
-        //     quantity: Number(i.quantity || 1),
-        //     insurance_value: Number(i.insurance_value || i.insuranceValue || 0)
-        //   }
-        // })
+    const fromPostal = process.env.MELHOR_ENVIO_FROM_POSTAL_CODE
+    const toPostal = postalCode
 
-        const products = sourceItems.flatMap(item => {
-          return Array.from({ length: item.quantity }, () => ({
-            weight: Number(process.env.ITEM_WEIGHT),
-            length: Number(process.env.ITEM_LENGTH),
-            height: Number(process.env.ITEM_HEIGHT),
-            width: Number(process.env.ITEM_WIDTH),
-            insurance_value: Number(item.insurance_value)
-          }));
-        });
+    // sanitize postal codes: remove non-digits
+    const sanitizeCEP = (s) => String(s || '').replace(/\D/g, '')
+    const fromDigits = sanitizeCEP(fromPostal)
+    const toDigits = sanitizeCEP(toPostal)
 
-        // sanitize postal codes: remove non-digits
-        const sanitizeCEP = (s) => String(s || '').replace(/\D/g, '')
-        const fromDigits = sanitizeCEP(fromPostal)
-        const toDigits = sanitizeCEP(toPostal)
+    if (!fromDigits || fromDigits.length !== 8) {
+      throw new Error('from.postal_code inválido. Deve conter 8 dígitos numéricos.')
+    }
+    if (!toDigits || toDigits.length !== 8) {
+      throw new Error('to.postal_code inválido. Deve conter 8 dígitos numéricos.')
+    }
 
-        if (!fromDigits || fromDigits.length !== 8) {
-          const e = new Error('from.postal_code inválido. Deve conter 8 dígitos numéricos.')
-          e.status = 400
-          e.body = { from_postal_code: fromPostal }
-          throw e
-        }
-        if (!toDigits || toDigits.length !== 8) {
-          const e = new Error('to.postal_code inválido. Deve conter 8 dígitos numéricos.')
-          e.status = 400
-          e.body = { to_postal_code: toPostal }
-          throw e
-        }
+    const products = items.flatMap(item => {
+      // insurance_value needs to be set. using price as insurance value.
+      const price = Number(item.preco ?? item.produtoVariacao?.produto?.preco ?? 0)
 
-        bodyToSend = {
-          from: { postal_code: String(fromDigits) },
-          to: { postal_code: String(toDigits) },
-          products
-        }
-      }
-    } catch (mapError) {
-      console.warn('shipping.calculateShipping mapping warning:', mapError?.message || mapError)
+      return Array.from({ length: item.quantity }, () => ({
+        weight: Number(process.env.ITEM_WEIGHT),
+        length: Number(process.env.ITEM_LENGTH),
+        height: Number(process.env.ITEM_HEIGHT),
+        width: Number(process.env.ITEM_WIDTH),
+        insurance_value: price
+      }));
+    });
+
+    const bodyToSend = {
+      from: { postal_code: String(fromDigits) },
+      to: { postal_code: String(toDigits) },
+      products
     }
 
     const userAgent = `${process.env.MELHOR_ENVIO_FROM_NAME} (${process.env.MELHOR_ENVIO_FROM_EMAIL})`;
