@@ -96,8 +96,17 @@ export const calculateShipping = async (payload, userId = null) => {
     })
 
     const text = await res.text()
-    let data
-    try { data = JSON.parse(text) } catch (e) { data = text }
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      data = text;
+    }
+
+    // garante que é array antes de filtrar
+    if (Array.isArray(data)) {
+      data = data.filter(carrier => !carrier.error);
+    }
 
     if (!res.ok) {
       const err = new Error('Melhor Envio returned non-OK')
