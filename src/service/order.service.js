@@ -622,7 +622,7 @@ export const handleMpNotification = async (body) => {
       }
 
       await orderRepo.updateOrderStatus(pedido.id, 'PAGO')
-      await cartRepo.clearCart(pedido.userId)
+      await cartRepo.clearCart(pedido.usuarioId)
       await startShipmentPurchaseJob(pedido.id)
     }
 
@@ -638,6 +638,7 @@ export const handleMpNotification = async (body) => {
 
     return { ok: true, mpStatus: paymentData.status }
   }
+
 
 
 
@@ -873,7 +874,7 @@ export const startShipmentPurchaseJob = async (pedidoId, attempt = 0) => {
 
     if (!pedido.melhorenvio_shipment_id) {
       const products = (pedido.itens || []).map(it => ({
-        name: it.nome || 'Produto',
+        name: it.nome || 'Tênis',
         quantity: it.quantidade,
         unitary_value: Number(it.preco || 0),
         weight: 1,
@@ -920,8 +921,8 @@ export const startShipmentPurchaseJob = async (pedidoId, attempt = 0) => {
         },
         to: {
           name: user.nome,
-          phone: pedido.telefone,
-          email: pedido.email,
+          email: user.email,
+          // phone: pedido.telefone,
           address: pedido.rua,
           number: pedido.numero,
           district: pedido.bairro,

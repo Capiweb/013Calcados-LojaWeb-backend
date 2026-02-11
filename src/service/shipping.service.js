@@ -42,7 +42,7 @@ export const calculateShipping = async (userId, postalCode) => {
 
     const products = items.flatMap(item => {
       // insurance_value needs to be set. using price as insurance value.
-      const price = Number(item.preco ?? item.produtoVariacao?.produto?.preco ?? 0)
+      const price = Number(item.produtoVariacao?.produto?.preco ?? 0)
 
       return Array.from({ length: item.quantidade }, () => ({
         weight: Number(process.env.ITEM_WEIGHT),
@@ -141,39 +141,36 @@ export const createShipment = async (shipmentPayload) => {
 //   return data
 // }
 
-export const purchaseShipment = async (shipmentId) => {
+export const purchaseShipment = async () => {
   const token = MELHOR_ENVIO_TOKEN
   if (!token) throw new Error('Nenhum token Melhor Envio disponível')
 
-  const url = process.env.MELHOR_ENVIO_PURCHASE_URL || MELHOR_ENVIO_PURCHASE_URL
-
-  const payload = {
-    orders: [shipmentId]
-  }
+  const url = process.env.MELHOR_ENVIO_PURCHASE_URL
 
   const res = await fetch(url, {
-    method: 'POST',
+    method: 'GET',
     headers: {
       Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
       Accept: 'application/json'
-    },
-    body: JSON.stringify(payload)
+    }
   })
 
   const text = await res.text()
   let data
-  try { data = JSON.parse(text) } catch (e) { data = text }
+  try { data = JSON.parse(text) } catch { data = text }
 
   if (!res.ok) {
     const err = new Error('purchaseShipment failed')
     err.status = res.status
     err.body = data
-    throw err
+
+    console.error(err)
+    // throw err
   }
 
   return data
 }
+
 
 
 export const getShipment = async (shipmentId) => {
