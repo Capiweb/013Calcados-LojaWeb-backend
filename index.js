@@ -98,7 +98,7 @@ try {
   console.warn('Socket.IO init failed:', e?.message || e)
 }
 
-server.listen(PORT, "0.0.0.0", () => {
+server.listen(PORT, () => {
   console.log(`🚀 Rodando em http://localhost:${PORT}`)
 })
 
