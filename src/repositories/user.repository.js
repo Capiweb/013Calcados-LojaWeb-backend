@@ -67,6 +67,13 @@ export const getUserFullProfile = async (id) => {
           total: true,
           shipping_status: true,
           tracking_number: true,
+          rua: true,
+          numero: true,
+          complemento: true,
+          bairro: true,
+          cidade: true,
+          estado: true,
+          cep: true,
           criadoEm: true,
           atualizadoEm: true,
           itens: {
