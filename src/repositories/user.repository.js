@@ -64,8 +64,33 @@ export const getUserFullProfile = async (id) => {
         select: {
           id: true,
           status: true,
+          total: true,
+          shipping_status: true,
+          tracking_number: true,
           criadoEm: true,
           atualizadoEm: true,
+          itens: {
+            select: {
+              id: true,
+              quantidade: true,
+              preco: true,
+              produtoVariacao: {
+                select: {
+                  id: true,
+                  tamanho: true,
+                  sku: true,
+                  produto: {
+                    select: {
+                      id: true,
+                      nome: true,
+                      imagemUrl: true,
+                      imagemPublicId: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
         },
         orderBy: {
           criadoEm: 'desc',

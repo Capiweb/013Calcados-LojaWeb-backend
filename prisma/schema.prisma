@@ -49,8 +49,6 @@ model Usuario {
   senha String
   papel PapelUsuario @default(USUARIO)
 
-  documento String @unique
-
   carrinho  Carrinho?
   pedidos   Pedido[]
   enderecos Endereco[]
@@ -230,7 +228,6 @@ model Pedido {
   // Melhor Envio integration fields
   melhorenvio_shipment_id String?
   melhorenvio_purchase_id String?
-  melhorenvio_service_id  Int?
   tracking_number         String?
   label_url               String?
   shipping_status         String?
@@ -288,7 +285,7 @@ model Feedback {
   produtoId String
   produto   Produto @relation(fields: [produtoId], references: [id])
 
-  estrelas   Float @default(0.0)
+  estrelas   Float // avaliação em estrelas (1.0, 1.5, 2.0, ..., 5.0, 5.5)
   comentario String? // comentário opcional
 
   criadoEm     DateTime @default(now())

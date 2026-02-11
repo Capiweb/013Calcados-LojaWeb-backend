@@ -10,11 +10,6 @@ export const createOrderItem = async (data) => {
   return prisma.pedidoItem.create({ data })
 }
 
-export const updateOrderShipping = async (pedidoId, shippingData = {}) => {
-  // shippingData can include: melhorenvio_shipment_id, melhorenvio_purchase_id, tracking_number, label_url, shipping_status, shipping_metadata
-  return prisma.pedido.update({ where: { id: pedidoId }, data: { ...shippingData } })
-}
-
 export const linkPayment = async (pedidoId, pagamentoData) => {
   // Use upsert on pedidoId (which is unique) to avoid unique constraint errors when a placeholder
   // payment already exists for the pedido. If pedidoId is null/undefined, fallback to create without pedidoId.
@@ -32,20 +27,6 @@ export const linkPayment = async (pedidoId, pagamentoData) => {
 export const getOrderById = async (id) => {
   return prisma.pedido.findUnique({ where: { id }, include: { itens: true, pagamento: true } })
 }
-
-export const getOrderByPedidoId = async (pedidoId) => {
-  if (!pedidoId) return null
-
-  return prisma.pedido.findUnique({
-    where: { id: pedidoId },
-    include: {
-      itens: true,
-      pagamento: true,
-      usuario: true
-    }
-  })
-}
-
 
 export const findPaymentByPagamentoId = async (pagamentoId) => {
   return prisma.pagamento.findFirst({ where: { pagamentoId } })
