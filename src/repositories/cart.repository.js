@@ -87,10 +87,21 @@ export const removeCartItem = async (id) => {
 }
 
 export const clearCart = async (usuarioId) => {
-  const cart = await prisma.carrinho.findUnique({ where: { usuarioId } })
+  if (!usuarioId) {
+    throw new Error('usuarioId é obrigatório')
+  }
+
+  const cart = await prisma.carrinho.findUnique({
+    where: { usuarioId }
+  })
+
   if (!cart) return
-  await prisma.carrinhoItem.deleteMany({ where: { carrinhoId: cart.id } })
+
+  await prisma.carrinhoItem.deleteMany({
+    where: { carrinhoId: cart.id }
+  })
 }
+
 
 export const findAllCarts = async () => {
   try {
