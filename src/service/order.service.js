@@ -44,8 +44,9 @@ export const removeItemFromCart = async (itemId) => {
 }
 
 //endereco.cep
-export const createOrderFromCart = async (userId, endereco, frete = 0, melhorenvio_service_id) => {
+export const createOrderFromCart = async (userId, endereco, melhorenvio_service_id) => {
   const cart = await cartRepo.getCartWithItems(userId)
+
   if (!cart || !cart.itens || cart.itens.length === 0) throw new Error('Carrinho vazio')
 
   if (!melhorenvio_service_id) throw new Error('É preciso selecionar um serviço de entrega')
@@ -565,17 +566,12 @@ export const handleMpNotification = async (body) => {
     const mappedStatus = mapMpStatus(paymentData.status)
     const pedidoId = resolvePedidoId(paymentData)
 
-    let shouldMarkPago = false
-    let shouldDecrementStock = false
-    let shouldStartShipment = false
-
     let pedido = null
-    let previousPaymentStatus = null
+    let shouldRunSideEffects = false
 
     // --- Reconciliação ---
     if (pedidoId) {
       const existingPayment = await orderRepo.findPaymentByPedidoId(pedidoId)
-      previousPaymentStatus = existingPayment?.status ?? null
 
       if (!existingPayment) {
         await orderRepo.createPaymentForPedido(pedidoId, paymentId, {
@@ -586,49 +582,47 @@ export const handleMpNotification = async (body) => {
         await orderRepo.updatePaymentId(existingPayment.pagamentoId, paymentId)
       }
 
-      await orderRepo.updatePaymentStatus(paymentId, mappedStatus)
-
-      if (mappedStatus === 'APROVADO' && previousPaymentStatus !== 'APROVADO') {
-        shouldMarkPago = true
-        shouldDecrementStock = true
-        shouldStartShipment = true
+      if (mappedStatus === 'APROVADO') {
+        shouldRunSideEffects =
+          await orderRepo.markPaymentAsApprovedIfNotYet(paymentId)
+      } else {
+        await orderRepo.updatePaymentStatus(paymentId, mappedStatus)
       }
 
       pedido = await orderRepo.getOrderByPedidoId(pedidoId)
     }
 
-    // --- Fallback: pagamento já existente ---
+    // --- Fallback ---
     if (!pedido) {
-      const existingPayment = await orderRepo.findPaymentByPagamentoId(paymentId)
-      if (!existingPayment) {
-        return { ok: true, ignored: true }
-      }
+      const existingPayment =
+        await orderRepo.findPaymentByPagamentoId(paymentId)
 
-      previousPaymentStatus = existingPayment.status
-      await orderRepo.updatePaymentStatus(paymentId, mappedStatus)
+      if (!existingPayment) return { ok: true, ignored: true }
 
-      if (mappedStatus === 'APROVADO' && previousPaymentStatus !== 'APROVADO') {
-        pedido = await orderRepo.getOrderByPaymentId(paymentId)
-        shouldMarkPago = true
-        shouldDecrementStock = true
-        shouldStartShipment = true
+      if (mappedStatus === 'APROVADO') {
+        shouldRunSideEffects =
+          await orderRepo.markPaymentAsApprovedIfNotYet(paymentId)
+
+        if (shouldRunSideEffects) {
+          pedido = await orderRepo.getOrderByPaymentId(paymentId)
+        }
+      } else {
+        await orderRepo.updatePaymentStatus(paymentId, mappedStatus)
       }
     }
 
-    // --- Side-effects (1 vez, controlado) ---
-    if (pedido && shouldDecrementStock) {
+    // --- Side-effects (executa apenas 1 vez real) ---
+    if (pedido && shouldRunSideEffects) {
       const res = await safeDecrementStockForPedido(pedido)
+      console.log("Estou no decremento: ", res)
+
       if (!res.ok) {
         await orderRepo.updatePaymentStatus(paymentId, 'REJEITADO')
         return { ok: false, reason: res.reason }
       }
-    }
 
-    if (pedido && shouldMarkPago) {
       await orderRepo.updateOrderStatus(pedido.id, 'PAGO')
-    }
-
-    if (pedido && shouldStartShipment) {
+      await cartRepo.clearCart(pedido.userId)
       await startShipmentPurchaseJob(pedido.id)
     }
 
@@ -644,6 +638,7 @@ export const handleMpNotification = async (body) => {
 
     return { ok: true, mpStatus: paymentData.status }
   }
+
 
 
   // Background: start shipment creation and purchase for orders marked as PAGO

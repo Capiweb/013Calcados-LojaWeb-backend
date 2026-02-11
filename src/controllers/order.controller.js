@@ -98,17 +98,11 @@ export const checkout = async (req, res) => {
       return res.status(400).json({ error: e.errors || e.message })
     }
 
-    // Create pedido in DB from cart (freeze address) before creating preference
-    // Accept optional frete in body and forward to service
-    // const frete = req.body?.frete == null ? undefined : Number(req.body.frete)
-    const fretes = await shippingService.calculateShipping(userId, endereco.cep);
-    const frete = fretes.find((f) => f.id === req.body?.melhorenvio_service_id);
-
     const melhorenvio_service_id = req.body?.melhorenvio_service_id == null ? undefined : Number(req.body.melhorenvio_service_id)
 
     let pedido
     try {
-      pedido = await orderService.createOrderFromCart(userId, endereco || {}, frete, melhorenvio_service_id)
+      pedido = await orderService.createOrderFromCart(userId, endereco || {}, melhorenvio_service_id)
     } catch (e) {
       console.error('Erro ao criar pedido:', e)
       return res.status(500).json({ error: 'Erro ao criar pedido' })

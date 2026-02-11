@@ -29,6 +29,21 @@ export const linkPayment = async (pedidoId, pagamentoData) => {
   })
 }
 
+export const markPaymentAsApprovedIfNotYet = async (pagamentoId) => {
+  const result = await prisma.pagamento.updateMany({
+    where: {
+      pagamentoId,
+      NOT: { status: 'APROVADO' },
+    },
+    data: {
+      status: 'APROVADO',
+    },
+  })
+
+  return result.count === 1
+}
+
+
 export const getOrderById = async (id) => {
   return prisma.pedido.findUnique({ where: { id }, include: { itens: true, pagamento: true } })
 }
