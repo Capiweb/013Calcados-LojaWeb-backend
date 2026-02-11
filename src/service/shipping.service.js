@@ -44,7 +44,7 @@ export const calculateShipping = async (userId, postalCode) => {
       // insurance_value needs to be set. using price as insurance value.
       const price = Number(item.preco ?? item.produtoVariacao?.produto?.preco ?? 0)
 
-      return Array.from({ length: item.quantity }, () => ({
+      return Array.from({ length: item.quantidade }, () => ({
         weight: Number(process.env.ITEM_WEIGHT),
         length: Number(process.env.ITEM_LENGTH),
         height: Number(process.env.ITEM_HEIGHT),
