@@ -48,7 +48,7 @@ model Usuario {
   email String       @unique
   senha String
   papel PapelUsuario @default(USUARIO)
-
+  documento String? @unique
   carrinho  Carrinho?
   pedidos   Pedido[]
   enderecos Endereco[]
@@ -228,6 +228,7 @@ model Pedido {
   // Melhor Envio integration fields
   melhorenvio_shipment_id String?
   melhorenvio_purchase_id String?
+  melhorenvio_service_id String?
   tracking_number         String?
   label_url               String?
   shipping_status         String?
