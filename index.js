@@ -32,15 +32,49 @@ if (allowedOrigins.length === 0) {
 }
 
 // CORS: permissive when developing locally, stricter in production
+// Support wildcard entries like *.vercel.app in allowed origins
+const isOriginAllowed = (origin) => {
+  if (!origin) return true
+  try {
+    const url = new URL(origin)
+    const host = url.host // hostname with port if present
+    // exact match or global wildcard
+    if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) return true
+    // check wildcard entries like *.vercel.app or vercel.app
+    for (const entry of allowedOrigins) {
+      if (!entry) continue
+      if (entry.includes('*')) {
+        // support patterns like *.vercel.app (match any subdomain)
+        const pattern = entry.replace('*', '')
+        if (host === pattern || host.endsWith(pattern)) return true
+      } else {
+        // entries without scheme may be host-only (e.g., example.com)
+        try {
+          const entryUrl = new URL(entry)
+          if (entry === origin || entryUrl.host === host) return true
+        } catch (e) {
+          // not a full url, compare host only
+          if (host === entry || host.endsWith(entry)) return true
+        }
+      }
+    }
+    return false
+  } catch (e) {
+    // if origin is not a valid URL, reject
+    return false
+  }
+}
+
 if (process.env.NODE_ENV === 'production') {
+  console.log('CORS allowedOrigins:', allowedOrigins)
   app.use(cors({
     origin: (origin, callback) => {
       // allow non-browser requests like curl/postman (no origin)
       if (!origin) return callback(null, true)
       // useful debug log to inspect actual origin sent by browser
       console.log('CORS origin request:', origin)
-      if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) return callback(null, true)
-      console.warn('Blocked CORS origin:', origin)
+      if (isOriginAllowed(origin)) return callback(null, true)
+      console.warn('Blocked CORS origin:', origin, 'allowed:', allowedOrigins)
       return callback(new Error('Not allowed by CORS'), false)
     },
     credentials: true,
