@@ -31,8 +31,8 @@ export const findUserById = async (id) => {
       id: true,
       nome: true,
       email: true,
+      telefone: true,
       papel: true,
-      documento: true,
     },
   });
 };
@@ -60,6 +60,7 @@ export const getUserFullProfile = async (id) => {
           criadoEm: true,
         },
       },
+      telefone: true,
       pedidos: {
         select: {
           id: true,

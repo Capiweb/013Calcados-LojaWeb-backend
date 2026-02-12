@@ -22,7 +22,7 @@ const isValidPassword = (senha) => {
 // Endpoint de registro
 export const register = async (req, res) => {
   try {
-    const { nome, email, senha, confirmarSenha, documento } = req.body;
+  const { nome, email, senha, confirmarSenha, documento, telefone } = req.body;
 
     // Validações de campos obrigatórios
     if (!nome || !email || !senha || !confirmarSenha || !documento) {
@@ -60,7 +60,7 @@ export const register = async (req, res) => {
     }
 
     // Registrar usuário
-    const newUser = await authService.registerUser(nome, email, senha, documento);
+  const newUser = await authService.registerUser(nome, email, senha, documento, telefone);
 
     // Retornar resposta de sucesso sem dados sensíveis
     return res.status(201).json({
@@ -68,6 +68,7 @@ export const register = async (req, res) => {
       user: {
         nome: newUser.nome,
         email: newUser.email,
+        telefone: newUser.telefone || null,
       },
     });
   } catch (error) {
@@ -106,7 +107,7 @@ export const login = async (req, res) => {
     }
 
     // Fazer login
-    const { token, user } = await authService.loginUser(email, senha);
+  const { token, user } = await authService.loginUser(email, senha);
 
     // Retornar token e dados do usuário
     return res.status(200).json({
@@ -114,6 +115,7 @@ export const login = async (req, res) => {
       user: {
         nome: user.nome,
         email: user.email,
+        telefone: user.telefone || null,
         enderecos: user.enderecos,
       },
     });

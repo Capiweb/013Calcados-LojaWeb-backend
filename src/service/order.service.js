@@ -817,6 +817,10 @@ export const getOrderById = async (id) => {
   return orderRepo.getOrderById(id)
 }
 
+export const getOrderFullById = async (id) => {
+  return orderRepo.getOrderFullById(id)
+}
+
 export const deleteOrder = async (pedidoId, requestingUserId, isAdmin = false) => {
   const pedido = await orderRepo.getOrderById(pedidoId)
   if (!pedido) throw new Error('Pedido não encontrado')

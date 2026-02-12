@@ -113,7 +113,7 @@ router.delete('/cart/items/:id', authMiddleware, orderController.removeItem)
  *         description: OK
  */
 router.post('/checkout', authMiddleware, validate(CheckoutSchema), orderController.checkout)
-router.get('/:id', authMiddleware, orderController.getOrderById)
+
 
 /**
  * @swagger
@@ -147,6 +147,7 @@ router.get('/:id', authMiddleware, orderController.getOrderById)
  *         description: OK
  */
 router.get('/admin', authMiddleware, adminMiddleware, orderController.getAllOrders)
+router.get('/admin/:id', authMiddleware, adminMiddleware, orderController.getOrderByIdAdmin)
 
 /**
  * @swagger
@@ -163,6 +164,9 @@ router.get('/admin', authMiddleware, adminMiddleware, orderController.getAllOrde
  */
 router.get('/carts', authMiddleware, adminMiddleware, orderController.getAllCarts)
 router.get('/carts/:id', authMiddleware, adminMiddleware, orderController.getCartById)
+
+// dynamic route for getting a single order by id must be declared after static admin/carts routes
+router.get('/:id', authMiddleware, orderController.getOrderById)
 
 // Delete a single order (user can delete their own; admin can delete any)
 /**

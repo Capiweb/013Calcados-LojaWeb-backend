@@ -17,6 +17,7 @@ model Usuario {
   email        String       @unique
   senha        String
   documento    String       @unique
+  telefone     String?      
   papel        PapelUsuario @default(USUARIO)
   criadoEm     DateTime     @default(now())
   atualizadoEm DateTime     @updatedAt

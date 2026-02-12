@@ -252,6 +252,19 @@ export const getAllOrders = async (req, res) => {
   }
 }
 
+// Admin: get a single order by id with full relations
+export const getOrderByIdAdmin = async (req, res) => {
+  try {
+    const { id } = req.params
+    const pedido = await orderService.getOrderFullById(id)
+    if (!pedido) return res.status(404).json({ error: 'Pedido não encontrado' })
+    return res.status(200).json(pedido)
+  } catch (error) {
+    console.error('getOrderByIdAdmin error:', error)
+    return res.status(500).json({ error: 'Erro ao obter pedido' })
+  }
+}
+
 export const getAllCarts = async (req, res) => {
   try {
     const carts = await orderService.listAllCarts()

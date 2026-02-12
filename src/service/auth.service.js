@@ -8,7 +8,7 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
 
 // Função para registrar um novo usuário
-export const registerUser = async (nome, email, senha, documento) => {
+export const registerUser = async (nome, email, senha, documento, telefone) => {
   // Verificar se o email já está cadastrado
   const existingUser = await userRepository.findUserByEmail(email);
 
@@ -25,6 +25,7 @@ export const registerUser = async (nome, email, senha, documento) => {
     email,
     senha: hashedPassword,
     documento,
+    telefone,
   });
 
   // Retornar dados sem informações sensíveis
@@ -32,6 +33,7 @@ export const registerUser = async (nome, email, senha, documento) => {
     id: newUser.id,
     nome: newUser.nome,
     email: newUser.email,
+    telefone: newUser.telefone || null,
   };
 };
 
@@ -69,6 +71,7 @@ export const loginUser = async (email, senha) => {
     user: {
       nome: user.nome,
       email: user.email,
+      telefone: user.telefone || null,
       enderecos: user.enderecos || [],
     },
   };
@@ -86,6 +89,7 @@ export const getUserById = async (userId) => {
     id: user.id,
     nome: user.nome,
     email: user.email,
+    telefone: user.telefone || null,
     papel: user.papel,
   };
 };
