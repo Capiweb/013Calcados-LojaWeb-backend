@@ -31,16 +31,24 @@ if (allowedOrigins.length === 0) {
   allowedOrigins.push('http://127.0.0.1:5500', 'http://localhost:5500', 'http://localhost:3000')
 }
 
-app.use(cors({
-  origin: (origin, callback) => {
-    // allow non-browser requests like curl/postman (no origin)
-    if (!origin) return callback(null, true)
-    if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) return callback(null, true)
-    console.warn('Blocked CORS origin:', origin)
-    return callback(new Error('Not allowed by CORS'), false)
-  },
-  credentials: true,
-}))
+// CORS: permissive when developing locally, stricter in production
+if (process.env.NODE_ENV === 'production') {
+  app.use(cors({
+    origin: (origin, callback) => {
+      // allow non-browser requests like curl/postman (no origin)
+      if (!origin) return callback(null, true)
+      // useful debug log to inspect actual origin sent by browser
+      console.log('CORS origin request:', origin)
+      if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) return callback(null, true)
+      console.warn('Blocked CORS origin:', origin)
+      return callback(new Error('Not allowed by CORS'), false)
+    },
+    credentials: true,
+  }))
+} else {
+  // development: allow all origins to avoid CORS friction when testing from local files/servers
+  app.use(cors({ origin: true, credentials: true }))
+}
 app.use(express.json())
 app.use(cookieParser())
 
