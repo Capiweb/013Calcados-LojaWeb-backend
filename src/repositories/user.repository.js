@@ -44,6 +44,7 @@ export const getUserFullProfile = async (id) => {
       id: true,
       nome: true,
       email: true,
+      documento: true,
       papel: true,
       criadoEm: true,
       atualizadoEm: true,
