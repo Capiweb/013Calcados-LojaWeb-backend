@@ -177,7 +177,8 @@ export const checkout = async (req, res) => {
 
     // Ensure we don't exclude payment methods (help show PIX if account supports it)
     mpBody.payment_methods = mpBody.payment_methods || {
-      installments: 1,
+      installments: 12,
+      default_installments: 12,
       excluded_payment_methods: [],
       excluded_payment_types: []
     }
