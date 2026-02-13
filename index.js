@@ -83,7 +83,9 @@ if (process.env.NODE_ENV === 'production') {
   // development: allow all origins to avoid CORS friction when testing from local files/servers
   app.use(cors({ origin: true, credentials: true }))
 }
-app.use(express.json())
+// Allow larger request bodies for bulk operations (products, uploads base64)
+app.use(express.json({ limit: '10mb' }))
+app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 app.use(cookieParser())
 
 // Documentação Swagger

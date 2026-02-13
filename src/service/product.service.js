@@ -9,12 +9,19 @@ export const createProductsBulk = async (products) => {
     throw new Error('Payload inválido: espere um array de produtos')
   }
 
+  // Process in batches to avoid very long sequential processing and to limit DB connections
+  const BATCH_SIZE = 10
   const created = []
-  for (const p of products) {
-    const payload = { ...p }
-    if (Array.isArray(p.variacoes)) payload.variacoes = { create: p.variacoes }
-    const prod = await productRepo.createProduct(payload)
-    created.push(prod)
+  for (let i = 0; i < products.length; i += BATCH_SIZE) {
+    const chunk = products.slice(i, i + BATCH_SIZE)
+    // map to normalized payloads
+    const ops = chunk.map(p => {
+      const payload = { ...p }
+      if (Array.isArray(p.variacoes)) payload.variacoes = { create: p.variacoes }
+      return productRepo.createProduct(payload)
+    })
+    const results = await Promise.all(ops)
+    created.push(...results)
   }
 
   return created
