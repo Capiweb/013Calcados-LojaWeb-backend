@@ -137,6 +137,8 @@ export const findProducts = async ({ where, skip, take, orderBy }) => {
       emPromocao: true,
       precoPromocional: true,
       estrelas: true,
+      criadoEm: true,
+      variacoes: true,
     },
   })
 }
