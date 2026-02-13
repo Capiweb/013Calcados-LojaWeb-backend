@@ -1000,3 +1000,41 @@ export const addFreightToOrder = async (orderId, freteValue) => {
 
   return orderRepo.getOrderById(orderId)
 }
+
+export const syncTracking = async () => {
+  const orders = await orderRepo.getOrdersWithShipmentId()
+
+  for (const order of orders) {
+    try {
+      const tracking = await getOrders(order.melhorenvio_shipment_id)
+      await orderRepo.updateOrderShippingInfo(order.id, {
+        tracking_number: tracking.tracking,
+      })
+    } catch (error) {
+      console.error(`Error syncing tracking for order ${order.id}:`, error.message)
+    }
+  }
+}
+
+export async function getOrders(melhorenvioShipmentId) {
+  const url = process.env.MELHOR_ENVIO_ORDERS_SEARCH_URL + melhorenvioShipmentId;
+  const token = 'Bearer ' + process.env.MELHOR_ENVIO_TOKEN
+  const userAgent = `${process.env.MELHOR_ENVIO_FROM_NAME} (${process.env.MELHOR_ENVIO_FROM_EMAIL})`;
+
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+      Authorization: token,
+      'Content-Type': 'application/json',
+      'User-Agent': userAgent
+    }
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`HTTP ${res.status}: ${body}`);
+  }
+
+  return res.json();
+}

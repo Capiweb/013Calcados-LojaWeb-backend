@@ -19,6 +19,9 @@ import shippingRoutes from './src/routes/shipping.routes.js'
 import * as orderService from './src/service/order.service.js'
 import { initIo } from './src/utils/io.js'
 import http from 'http'
+import { melhorenvioRoutes } from './src/routes/melhorenvio.routes.js'
+import cron from 'node-cron'
+
 const app = express()
 
 // CORS configuration
@@ -95,6 +98,8 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
   },
 }))
 
+app.use('/webhooks/melhorenvio', melhorenvioRoutes)
+
 // Rotas de autenticação
 app.use('/api/auth', authRoutes)
 
@@ -144,6 +149,10 @@ try {
 
 server.listen(PORT, () => {
   console.log(`🚀 Rodando em http://localhost:${PORT}`)
+
+  cron.schedule('0 * * * *', async () => {
+    await orderService.syncTracking();
+  });
 })
 
 // Scheduled cleanup: remove PENDENTE payments older than 24 hours

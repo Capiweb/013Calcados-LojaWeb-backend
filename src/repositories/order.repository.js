@@ -207,3 +207,22 @@ export const deletePaymentsByUserId = async (usuarioId) => {
   const res = await prisma.pagamento.deleteMany({ where: { pedidoId: { in: ids } } })
   return res
 }
+
+export const getOrdersWithShipmentId = async () => {
+  return prisma.pedido.findMany({
+    where: {
+      melhorenvio_shipment_id: {
+        not: null
+      },
+      tracking_number: null
+    },
+    select: {
+      id: true,
+      melhorenvio_shipment_id: true,
+      tracking_number: true,
+      shipping_status: true,
+      atualizadoEm: true
+    }
+  })
+}
+
