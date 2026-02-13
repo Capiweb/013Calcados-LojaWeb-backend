@@ -910,6 +910,13 @@ export const startShipmentPurchaseJob = async (pedidoId, attempt = 0) => {
       //! Checar se a plataforma irá usar apenas PAC como forma de frete
       const user = await findUserById(pedido.usuarioId);
 
+      // sanitize document (CPF/CNPJ) from user record
+      const rawDocument = user.documento || ''
+      const sanitizedDocument = String(rawDocument).replace(/\D/g, '')
+      if (!sanitizedDocument) {
+        throw new Error('Documento do destinatário ausente. Certifique-se de que o usuário tenha CPF/CNPJ cadastrado.')
+      }
+
       const shipmentPayload = {
         service: pedido.melhorenvio_service_id,
         from: {
@@ -932,7 +939,7 @@ export const startShipmentPurchaseJob = async (pedidoId, attempt = 0) => {
           district: pedido.bairro,
           city: pedido.cidade,
           state_abbr: pedido.estado,
-          document: user.documento,
+          document: sanitizedDocument,
           postal_code: pedido.cep.replace(/\D/g, '')
         },
         products,
