@@ -45,7 +45,7 @@ const options = {
       },
       {
         name: 'Produtos',
-        description: 'Catálogo de produtos',
+        description: 'Catálogo de produto',
       },
       {
         name: 'Categorias',
