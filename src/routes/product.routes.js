@@ -66,7 +66,7 @@ const router = express.Router()
 import { uploadSingle } from '../middleware/uploadMiddleware.js'
 
 // Accept either application/json with imagemUrl or multipart/form-data with file field 'image'
-router.post('/', authMiddleware, adminMiddleware, uploadSingle('image'), validate(ProductCreateSchema), productController.create)
+router.post('/', authMiddleware, adminMiddleware, uploadSingle('image'), productController.create)
 router.post('/bulk', authMiddleware, adminMiddleware, validate(ProductBulkSchema), productController.createBulk)
 router.get('/', productController.getAll)
 /**

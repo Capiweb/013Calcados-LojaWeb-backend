@@ -1,7 +1,39 @@
 import * as productRepo from '../repositories/product.repository.js'
 
+export function mapProductCreateInput(raw) {
+  return {
+    nome: raw.nome,
+    slug: raw.slug,
+    descricao: raw.descricao,
+
+    preco: Number(raw.preco),
+
+    categoriaId: raw.categoriaId,
+
+    emPromocao:
+      raw.emPromocao === true ||
+      raw.emPromocao === 'true',
+
+    imagemUrl: raw.imagemUrl ?? null,
+    imagemPublicId: raw.imagemPublicId ?? null,
+
+    variacoes: raw.variacoes
+      ? {
+        create: JSON.parse(raw.variacoes).map((v) => ({
+          tipoTamanho: v.tipoTamanho,
+          tamanho: v.tamanho,
+          estoque: Number(v.estoque),
+          sku: v.sku,
+          cores: v.cores
+        }))
+      }
+      : undefined
+  };
+}
+
+
 export const createProduct = async (payload) => {
-  return productRepo.createProduct(payload)
+  return productRepo.createProduct(mapProductCreateInput(payload))
 }
 
 export const createProductsBulk = async (products) => {
