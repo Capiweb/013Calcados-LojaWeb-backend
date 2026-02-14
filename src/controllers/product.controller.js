@@ -4,28 +4,38 @@ import { uploadToCloudinary, deleteFromCloudinary } from '../utils/cloudinary.js
 export const create = async (req, res) => {
   try {
     const payload = { ...req.body }
-    // if file uploaded, upload to cloudinary and set imagemUrl + imagemPublicId
-    // Priority: multipart/file upload (req.file) -> imagemBase64 -> imagemUrl
-    if (req.file && req.file.buffer) {
-      const uploaded = await uploadToCloudinary(req.file.buffer)
-      payload.imagemUrl = uploaded.secure_url
-      payload.imagemPublicId = uploaded.public_id
-    } else if (payload.imagemBase64) {
-      // imagemBase64 expected as data URL or raw base64
-      const matches = payload.imagemBase64.match(/data:(image\/[a-zA-Z]+);base64,(.*)$/)
-      let b64 = payload.imagemBase64
-      if (matches) {
-        b64 = matches[2]
+    // Support up to 6 images. Priority: multipart files (req.files) -> imagemBase64 (array) -> imagemUrl (single)
+    payload.imagemUrls = payload.imagemUrls || []
+    payload.imagemPublicIds = payload.imagemPublicIds || []
+
+    // multipart files (multer) - support req.files (array) or req.file (fallback single)
+    const files = req.files && Array.isArray(req.files) ? req.files.slice(0, 6) : (req.file ? [req.file] : [])
+    if (files.length) {
+      for (const f of files.slice(0, 6)) {
+        if (f && f.buffer) {
+          const uploaded = await uploadToCloudinary(f.buffer)
+          payload.imagemUrls.push(uploaded.secure_url)
+          payload.imagemPublicIds.push(uploaded.public_id)
+        }
       }
-      const buffer = Buffer.from(b64, 'base64')
-      const uploaded = await uploadToCloudinary(buffer)
-      payload.imagemUrl = uploaded.secure_url
-      payload.imagemPublicId = uploaded.public_id
-      // remove imagemBase64 to avoid storing it
+    } else if (Array.isArray(payload.imagemBase64) && payload.imagemBase64.length) {
+      for (const item of payload.imagemBase64.slice(0, 6)) {
+        const matches = String(item || '').match(/data:(image\/[a-zA-Z]+);base64,(.*)$/)
+        let b64 = item
+        if (matches) b64 = matches[2]
+        const buffer = Buffer.from(b64, 'base64')
+        const uploaded = await uploadToCloudinary(buffer)
+        payload.imagemUrls.push(uploaded.secure_url)
+        payload.imagemPublicIds.push(uploaded.public_id)
+      }
       delete payload.imagemBase64
+    } else if (payload.imagemUrl) {
+      // single imagemUrl provided
+      payload.imagemUrls.push(payload.imagemUrl)
+      if (payload.imagemPublicId) payload.imagemPublicIds.push(payload.imagemPublicId)
     }
 
-    const produto = await productService.createProduct(payload)
+  const produto = await productService.createProduct(payload)
 
     return res.status(201).json(produto)
   } catch (error) {
@@ -71,28 +81,45 @@ export const update = async (req, res) => {
   try {
     const { id } = req.params
     const data = { ...req.body }
-    // handle new uploaded image
-    if (req.file && req.file.buffer) {
-      const uploaded = await uploadToCloudinary(req.file.buffer)
-      data.imagemUrl = uploaded.secure_url
-      data.imagemPublicId = uploaded.public_id
-    } else if (data.imagemBase64) {
-      const matches = data.imagemBase64.match(/data:(image\/[a-zA-Z]+);base64,(.*)$/)
-      let b64 = data.imagemBase64
-      if (matches) b64 = matches[2]
-      const buffer = Buffer.from(b64, 'base64')
-      const uploaded = await uploadToCloudinary(buffer)
-      data.imagemUrl = uploaded.secure_url
-      data.imagemPublicId = uploaded.public_id
+    // handle up to 6 new uploaded images
+    data.imagemUrls = data.imagemUrls || []
+    data.imagemPublicIds = data.imagemPublicIds || []
+    const files = req.files && Array.isArray(req.files) ? req.files.slice(0, 6) : (req.file ? [req.file] : [])
+    if (files.length) {
+      for (const f of files.slice(0, 6)) {
+        if (f && f.buffer) {
+          const uploaded = await uploadToCloudinary(f.buffer)
+          data.imagemUrls.push(uploaded.secure_url)
+          data.imagemPublicIds.push(uploaded.public_id)
+        }
+      }
+    } else if (Array.isArray(data.imagemBase64) && data.imagemBase64.length) {
+      for (const item of data.imagemBase64.slice(0, 6)) {
+        const matches = String(item || '').match(/data:(image\/[a-zA-Z]+);base64,(.*)$/)
+        let b64 = item
+        if (matches) b64 = matches[2]
+        const buffer = Buffer.from(b64, 'base64')
+        const uploaded = await uploadToCloudinary(buffer)
+        data.imagemUrls.push(uploaded.secure_url)
+        data.imagemPublicIds.push(uploaded.public_id)
+      }
       delete data.imagemBase64
+    } else if (data.imagemUrl) {
+      data.imagemUrls.push(data.imagemUrl)
+      if (data.imagemPublicId) data.imagemPublicIds.push(data.imagemPublicId)
     }
 
-    // delete old image if exists (only when we replaced it)
-    if (data.imagemPublicId) {
+    // delete old images if we replaced them (imagemPublicIds present)
+    if (data.imagemPublicIds && data.imagemPublicIds.length) {
       try {
         const existing = await productService.getProductById(id)
-        if (existing && existing.imagemPublicId) {
-          await deleteFromCloudinary(existing.imagemPublicId)
+        if (existing && Array.isArray(existing.imagemPublicIds)) {
+          for (const pid of existing.imagemPublicIds) {
+            try { await deleteFromCloudinary(pid) } catch (e) { /* swallow */ }
+          }
+        } else if (existing && existing.imagemPublicId) {
+          // fallback for older records
+          try { await deleteFromCloudinary(existing.imagemPublicId) } catch (e) { /* swallow */ }
         }
       } catch (err) {
         console.error('Erro ao apagar imagem antiga do Cloudinary', err)

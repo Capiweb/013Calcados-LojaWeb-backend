@@ -63,10 +63,10 @@ const router = express.Router()
  *               $ref: '#/components/schemas/ProductListResponse'
  *
  */
-import { uploadSingle } from '../middleware/uploadMiddleware.js'
+import { uploadSingle, uploadArray } from '../middleware/uploadMiddleware.js'
 
 // Accept either application/json with imagemUrl or multipart/form-data with file field 'image'
-router.post('/', authMiddleware, adminMiddleware, uploadSingle('image'), productController.create)
+router.post('/', authMiddleware, adminMiddleware, uploadArray('image', 6), productController.create)
 router.post('/bulk', authMiddleware, adminMiddleware, validate(ProductBulkSchema), productController.createBulk)
 router.get('/', productController.getAll)
 /**
@@ -90,9 +90,6 @@ router.get('/', productController.getAll)
  *             schema:
  *               $ref: '#/components/schemas/ProductDetailResponse'
  */
-router.get('/:id', productController.getById)
-router.put('/:id', authMiddleware, adminMiddleware, uploadSingle('image'), productController.update)
-router.delete('/:id', authMiddleware, adminMiddleware, productController.remove)
 
 /**
  * @swagger
@@ -108,7 +105,6 @@ router.delete('/:id', authMiddleware, adminMiddleware, productController.remove)
  *       404:
  *         description: Nenhuma variação encontrada
  */
-router.get('/variacoes/todas', variacaoController.getAllVariacoes)
 
 /**
  * @swagger
@@ -125,6 +121,13 @@ router.get('/variacoes/todas', variacaoController.getAllVariacoes)
  *           type: string
  *           format: uuid
  */
+
+// Move variacoes endpoints above the dynamic :id route to avoid accidental capture
+router.get('/variacoes/todas', variacaoController.getAllVariacoes)
 router.get('/variacoes/:id', variacaoController.getVariacao)
+
+router.get('/:id', productController.getById)
+router.put('/:id', authMiddleware, adminMiddleware, uploadArray('image', 6), productController.update)
+router.delete('/:id', authMiddleware, adminMiddleware, productController.remove)
 
 export default router

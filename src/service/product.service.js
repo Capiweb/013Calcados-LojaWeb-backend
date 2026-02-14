@@ -15,7 +15,28 @@ export function mapProductCreateInput(raw) {
       raw.emPromocao === 'true',
 
     imagemUrl: raw.imagemUrl ?? null,
-    imagemPublicId: raw.imagemPublicId ?? null,
+      // support multiple images arrays (from controller) or single imagemUrl/imagemPublicId
+      imagemUrls: (() => {
+        if (!raw.imagemUrls && !raw.imagemUrl) return undefined
+        try {
+          if (typeof raw.imagemUrls === 'string') return JSON.parse(raw.imagemUrls)
+          if (Array.isArray(raw.imagemUrls)) return raw.imagemUrls
+        } catch (e) {
+          // ignore parse error
+        }
+        return raw.imagemUrl ? [raw.imagemUrl] : undefined
+      })(),
+      imagemPublicIds: (() => {
+        if (!raw.imagemPublicIds && !raw.imagemPublicId) return undefined
+        try {
+          if (typeof raw.imagemPublicIds === 'string') return JSON.parse(raw.imagemPublicIds)
+          if (Array.isArray(raw.imagemPublicIds)) return raw.imagemPublicIds
+        } catch (e) {
+          // ignore
+        }
+        return raw.imagemPublicId ? [raw.imagemPublicId] : undefined
+      })(),
+      imagemPublicId: raw.imagemPublicId ?? null,
 
     variacoes: raw.variacoes
       ? {

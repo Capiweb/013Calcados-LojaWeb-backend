@@ -1017,7 +1017,21 @@ export const syncTracking = async () => {
 }
 
 export async function getOrders(melhorenvioShipmentId) {
-  const url = process.env.MELHOR_ENVIO_ORDERS_SEARCH_URL + melhorenvioShipmentId;
+  // Build absolute URL safely. Prefer explicit base MELHOR_ENVIO_BASE_URL if provided.
+  const ordersPath = String(process.env.MELHOR_ENVIO_ORDERS_SEARCH_URL || '').trim()
+  const base = String(process.env.MELHOR_ENVIO_BASE_URL || '').trim()
+  let url
+  try {
+    if (ordersPath.startsWith('http')) {
+      url = new URL(ordersPath + melhorenvioShipmentId).toString()
+    } else if (base && base.startsWith('http')) {
+      url = new URL(ordersPath + melhorenvioShipmentId, base).toString()
+    } else {
+      throw new Error('MELHOR_ENVIO_ORDERS_SEARCH_URL is not absolute and MELHOR_ENVIO_BASE_URL is not set')
+    }
+  } catch (err) {
+    throw new Error(`Invalid Melhor Envio URL configuration: ${err.message}`)
+  }
   const token = 'Bearer ' + process.env.MELHOR_ENVIO_TOKEN
   const userAgent = `${process.env.MELHOR_ENVIO_FROM_NAME} (${process.env.MELHOR_ENVIO_FROM_EMAIL})`;
 

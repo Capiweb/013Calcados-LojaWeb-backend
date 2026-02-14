@@ -15,7 +15,10 @@ export const ProductCreateSchema = z.object({
   emPromocao: z.boolean().optional().default(false),
   precoPromocional: z.number().nullable().optional(),
   slug: z.string().min(1),
-  imagemUrl: z.string().url(),
+  // accept single imagemUrl or multiple imagemUrls or imagemBase64 array
+  imagemUrl: z.string().url().optional(),
+  imagemUrls: z.array(z.string().url()).optional(),
+  imagemBase64: z.array(z.string()).optional(),
   categoriaId: z.string().uuid(),
   variacoes: z.array(VariacaoSchema).min(1)
 })

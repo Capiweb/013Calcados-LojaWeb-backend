@@ -10,6 +10,19 @@ export const createProduct = async (data) => {
       payload.variacoes = { create: data.variacoes }
     }
 
+    // Ensure categoria relation is connected if categoriaId provided
+    if (payload.categoriaId) {
+      payload.categoria = { connect: { id: payload.categoriaId } }
+      // remove scalar to avoid confusion
+      delete payload.categoriaId
+    }
+
+    // Ensure imagemUrl (required in schema) is set: prefer first imagemUrls
+    if (!payload.imagemUrl) {
+      if (Array.isArray(payload.imagemUrls) && payload.imagemUrls.length) payload.imagemUrl = payload.imagemUrls[0]
+      else payload.imagemUrl = ''
+    }
+
     return await prisma.produto.create({
       data: payload,
       include: {
@@ -48,6 +61,15 @@ export const createProduct = async (data) => {
       const safeData = {
         ...data,
         variacoes: safeVariacoes ? { create: safeVariacoes } : undefined
+      }
+      // same safeguards for safeData: connect categoria and ensure imagemUrl
+      if (safeData.categoriaId) {
+        safeData.categoria = { connect: { id: safeData.categoriaId } }
+        delete safeData.categoriaId
+      }
+      if (!safeData.imagemUrl) {
+        if (Array.isArray(safeData.imagemUrls) && safeData.imagemUrls.length) safeData.imagemUrl = safeData.imagemUrls[0]
+        else safeData.imagemUrl = ''
       }
       return prisma.produto.create({
         data: safeData,
@@ -133,6 +155,8 @@ export const findProducts = async ({ where, skip, take, orderBy }) => {
       nome: true,
       slug: true,
       imagemUrl: true,
+      imagemUrls: true,
+      imagemPublicIds: true,
       preco: true,
       emPromocao: true,
       precoPromocional: true,

@@ -82,11 +82,13 @@ model Produto {
   precoPromocional Decimal?          @db.Decimal(10, 2)
   slug             String            @unique
   imagemUrl        String
+  imagemUrls       String[]
   categoriaId      String
   criadoEm         DateTime          @default(now())
   atualizadoEm     DateTime          @updatedAt
   estrelas         Float             @default(0)
   imagemPublicId   String?
+  imagemPublicIds  String[]
   favoritos        Favorito[]
   feedbacks        Feedback[]
   categoria        Categoria         @relation(fields: [categoriaId], references: [id])

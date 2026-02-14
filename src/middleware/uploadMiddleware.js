@@ -39,3 +39,18 @@ export const uploadSingle = (fieldName = 'image') => (req, res, next) => {
 				return next()
 			})
 }
+
+export const uploadArray = (fieldName = 'image', maxCount = 6) => (req, res, next) => {
+	getUploadInstance()
+		.then((u) => {
+			const handler = u.array(fieldName, maxCount)
+			handler(req, res, (err) => {
+				if (err) return next(err)
+				return next()
+			})
+		})
+		.catch((err) => {
+			console.warn('multer not available, skipping multipart handling:', err?.message || err)
+			return next()
+		})
+}
