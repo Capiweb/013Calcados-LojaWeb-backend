@@ -241,15 +241,18 @@ export const deleteProduct = async (id) => {
 }
 
 export const decrementStock = async (produtoVariacaoId, amount) => {
-  return prisma.produtoVariacao.updateMany({
+  const res = await prisma.produtoVariacao.updateMany({
     where: { id: produtoVariacaoId, estoque: { gte: amount } },
     data: { estoque: { decrement: amount } }
   })
+  // return number of rows affected for easier checks upstream
+  return res.count ?? 0
 }
 
 export const incrementStock = async (produtoVariacaoId, amount) => {
-  return prisma.produtoVariacao.updateMany({
+  const res = await prisma.produtoVariacao.updateMany({
     where: { id: produtoVariacaoId },
     data: { estoque: { increment: amount } }
   })
+  return res.count ?? 0
 }
