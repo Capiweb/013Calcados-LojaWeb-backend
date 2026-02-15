@@ -130,4 +130,7 @@ router.get('/:id', productController.getById)
 router.put('/:id', authMiddleware, adminMiddleware, uploadArray('image', 6), productController.update)
 router.delete('/:id', authMiddleware, adminMiddleware, productController.remove)
 
+// Admin route to decrement variation stock by 1
+router.post('/admin/:produtoId/variacoes/:variacaoId/decrement-stock', authMiddleware, adminMiddleware, productController.decrementVariationStock)
+
 export default router

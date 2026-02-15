@@ -151,3 +151,7 @@ export const updateProduct = async (id, data) => {
 export const deleteProduct = async (id) => {
   return productRepo.deleteProduct(id)
 }
+
+export const decrementStock = async (produtoVariacaoId, amount = 1) => {
+  return productRepo.decrementStock(produtoVariacaoId, amount)
+}

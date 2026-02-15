@@ -152,3 +152,22 @@ export const remove = async (req, res) => {
     return res.status(500).json({ error: 'Erro ao deletar produto' })
   }
 }
+
+// Admin: decrement estoque da variação (subtrai 1)
+export const decrementVariationStock = async (req, res) => {
+  try {
+    const { produtoId, variacaoId } = req.params
+    if (!variacaoId) return res.status(400).json({ error: 'variacaoId é obrigatório' })
+
+    // repository function returns number of rows updated
+    const updated = await productService.decrementStock(variacaoId, 1)
+    if (typeof updated === 'number' && updated > 0) {
+      return res.status(200).json({ success: true })
+    }
+
+    return res.status(400).json({ error: 'Não foi possível decrementar o estoque (talvez estoque insuficiente ou variação não encontrada)' })
+  } catch (err) {
+    console.error('Erro ao decrementar estoque da variação', err)
+    return res.status(500).json({ error: 'Erro ao decrementar estoque' })
+  }
+}
