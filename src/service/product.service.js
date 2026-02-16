@@ -93,7 +93,8 @@ const buildWhere = (query) => {
     if (query.precoMax) where.preco.lte = Number(query.precoMax)
   }
   if (query.tamanho) {
-    where.variacoes = { some: { tamanho: query.tamanho } }
+    // only match products that have at least one variation with the requested size and in stock
+    where.variacoes = { some: { tamanho: query.tamanho, estoque: { gt: 0 } } }
   }
   if (query.emEstoque) {
     where.variacoes = { some: { estoque: { gt: 0 } } }
