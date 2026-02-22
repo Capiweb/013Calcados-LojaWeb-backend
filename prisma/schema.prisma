@@ -83,7 +83,8 @@ model Produto {
   slug             String            @unique
   imagemUrl        String
   imagemUrls       String[]
-  categoriaId      String
+  // Support multiple categories per product
+  // removed single categoriaId in favor of implicit many-to-many relation
   criadoEm         DateTime          @default(now())
   atualizadoEm     DateTime          @updatedAt
   estrelas         Float             @default(0)
@@ -91,7 +92,7 @@ model Produto {
   imagemPublicIds  String[]
   favoritos        Favorito[]
   feedbacks        Feedback[]
-  categoria        Categoria         @relation(fields: [categoriaId], references: [id])
+  categorias       Categoria[]
   variacoes        ProdutoVariacao[]
 }
 

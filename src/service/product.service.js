@@ -7,7 +7,8 @@ export function mapProductCreateInput(raw) {
     descricao: raw.descricao,
 
     preco: Number(raw.preco),
-  categoriaId: raw.categoriaId,
+  // accept multiple categories via categoriaIds (array of uuids) or legacy categoriaId
+  categoriaIds: Array.isArray(raw.categoriaIds) ? raw.categoriaIds : (raw.categoriaId ? [raw.categoriaId] : undefined),
 
   // Accept several truthy representations coming from forms or JSON
   emPromocao:
@@ -101,7 +102,7 @@ export const createProductsBulk = async (products) => {
 const buildWhere = (query) => {
   const where = {}
 
-  if (query.categoria) where.categoria = { slug: query.categoria }
+  if (query.categoria) where.categorias = { some: { slug: query.categoria } }
   if (query.emPromocao) where.emPromocao = query.emPromocao === 'true'
   if (query.q) where.nome = { contains: query.q, mode: 'insensitive' }
   if (query.precoMin || query.precoMax) {

@@ -69,7 +69,8 @@ export const checkout = async (req, res) => {
         title: p.nome || `Produto ${it.produtoVariacaoId}`,
         description: p.descricao || '',
         picture_url: p.imagemUrl || undefined,
-        category_id: p.categoriaId || undefined,
+  // category_id for MP: prefer first category slug if available
+  category_id: (p.categorias && p.categorias.length && p.categorias[0].slug) ? p.categorias[0].slug : (p.categoriaId || undefined),
         quantity: Number(it.quantidade) || 1,
         unit_price: Number(it.preco ?? p.preco ?? 0),
         currency_id: 'BRL'

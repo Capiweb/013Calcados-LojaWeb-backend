@@ -19,7 +19,9 @@ export const ProductCreateSchema = z.object({
   imagemUrl: z.string().url().optional(),
   imagemUrls: z.array(z.string().url()).optional(),
   imagemBase64: z.array(z.string()).optional(),
-  categoriaId: z.string().uuid(),
+  // accept multiple categories or legacy single-category id
+  categoriaIds: z.array(z.string().uuid()).optional(),
+  categoriaId: z.string().uuid().optional(),
   variacoes: z.array(VariacaoSchema).min(1)
 })
 

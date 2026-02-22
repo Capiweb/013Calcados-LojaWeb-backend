@@ -10,10 +10,13 @@ export const createProduct = async (data) => {
       payload.variacoes = { create: data.variacoes }
     }
 
-    // Ensure categoria relation is connected if categoriaId provided
-    if (payload.categoriaId) {
-      payload.categoria = { connect: { id: payload.categoriaId } }
-      // remove scalar to avoid confusion
+    // Support multiple categories: if categoriaIds provided (array of uuids), connect them
+    if (payload.categoriaIds && Array.isArray(payload.categoriaIds) && payload.categoriaIds.length) {
+      payload.categorias = { connect: payload.categoriaIds.map(id => ({ id })) }
+      delete payload.categoriaIds
+    } else if (payload.categoriaId) {
+      // legacy single-category support
+      payload.categorias = { connect: [{ id: payload.categoriaId }] }
       delete payload.categoriaId
     }
 
@@ -26,7 +29,7 @@ export const createProduct = async (data) => {
     return await prisma.produto.create({
       data: payload,
       include: {
-        categoria: true,
+        categorias: true,
         variacoes: true,
       },
     })
@@ -63,8 +66,11 @@ export const createProduct = async (data) => {
         variacoes: safeVariacoes ? { create: safeVariacoes } : undefined
       }
       // same safeguards for safeData: connect categoria and ensure imagemUrl
-      if (safeData.categoriaId) {
-        safeData.categoria = { connect: { id: safeData.categoriaId } }
+      if (safeData.categoriaIds && Array.isArray(safeData.categoriaIds) && safeData.categoriaIds.length) {
+        safeData.categorias = { connect: safeData.categoriaIds.map(id => ({ id })) }
+        delete safeData.categoriaIds
+      } else if (safeData.categoriaId) {
+        safeData.categorias = { connect: [{ id: safeData.categoriaId }] }
         delete safeData.categoriaId
       }
       if (!safeData.imagemUrl) {
@@ -73,7 +79,7 @@ export const createProduct = async (data) => {
       }
       return prisma.produto.create({
         data: safeData,
-        include: { categoria: true, variacoes: true }
+        include: { categorias: true, variacoes: true }
       })
     }
     throw err
@@ -85,7 +91,7 @@ export const findProductById = async (id) => {
     return await prisma.produto.findUnique({
       where: { id },
       include: {
-        categoria: true,
+        categorias: true,
         variacoes: true,
         feedbacks: {
           include: {
@@ -108,7 +114,7 @@ export const findProductById = async (id) => {
       return prisma.produto.findUnique({
         where: { id },
         include: {
-          categoria: true,
+          categorias: true,
           variacoes: {
             select: {
               id: true,
@@ -193,7 +199,7 @@ export const updateProduct = async (id, data) => {
       where: { id },
       data: payload,
       include: {
-        categoria: true,
+        categorias: true,
         variacoes: true,
       },
     })
@@ -230,7 +236,7 @@ export const updateProduct = async (id, data) => {
         }
         return base
       })()
-      return prisma.produto.update({ where: { id }, data: safePayload, include: { categoria: true, variacoes: true } })
+  return prisma.produto.update({ where: { id }, data: safePayload, include: { categorias: true, variacoes: true } })
     }
     throw err
   }

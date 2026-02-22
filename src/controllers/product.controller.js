@@ -4,6 +4,8 @@ import { uploadToCloudinary, deleteFromCloudinary } from '../utils/cloudinary.js
 export const create = async (req, res) => {
   try {
     const payload = { ...req.body }
+  // normalize single categoriaId into categoriaIds for the service/repository
+  if (payload.categoriaId && !payload.categoriaIds) payload.categoriaIds = [payload.categoriaId]
     // Support up to 6 images. Priority: multipart files (req.files) -> imagemBase64 (array) -> imagemUrl (single)
     payload.imagemUrls = payload.imagemUrls || []
     payload.imagemPublicIds = payload.imagemPublicIds || []
@@ -80,7 +82,8 @@ export const getById = async (req, res) => {
 export const update = async (req, res) => {
   try {
     const { id } = req.params
-    const data = { ...req.body }
+  const data = { ...req.body }
+  if (data.categoriaId && !data.categoriaIds) data.categoriaIds = [data.categoriaId]
     // handle up to 6 new uploaded images
     data.imagemUrls = data.imagemUrls || []
     data.imagemPublicIds = data.imagemPublicIds || []
