@@ -171,3 +171,21 @@ export const decrementVariationStock = async (req, res) => {
     return res.status(500).json({ error: 'Erro ao decrementar estoque' })
   }
 }
+
+// Admin: increment estoque da variação (soma 1)
+export const incrementVariationStock = async (req, res) => {
+  try {
+    const { produtoId, variacaoId } = req.params
+    if (!variacaoId) return res.status(400).json({ error: 'variacaoId é obrigatório' })
+
+    const updated = await productService.incrementStock(variacaoId, 1)
+    if (typeof updated === 'number' && updated > 0) {
+      return res.status(200).json({ success: true })
+    }
+
+    return res.status(400).json({ error: 'Não foi possível incrementar o estoque (variação não encontrada)' })
+  } catch (err) {
+    console.error('Erro ao incrementar estoque da variação', err)
+    return res.status(500).json({ error: 'Erro ao incrementar estoque' })
+  }
+}

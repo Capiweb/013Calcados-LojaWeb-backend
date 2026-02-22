@@ -132,5 +132,6 @@ router.delete('/:id', authMiddleware, adminMiddleware, productController.remove)
 
 // Admin route to decrement variation stock by 1
 router.post('/admin/:produtoId/variacoes/:variacaoId/decrement-stock', authMiddleware, adminMiddleware, productController.decrementVariationStock)
+router.post('/admin/:produtoId/variacoes/:variacaoId/increment-stock', authMiddleware, adminMiddleware, productController.incrementVariationStock)
 
 export default router

@@ -7,14 +7,22 @@ export function mapProductCreateInput(raw) {
     descricao: raw.descricao,
 
     preco: Number(raw.preco),
+  categoriaId: raw.categoriaId,
 
-    categoriaId: raw.categoriaId,
+  // Accept several truthy representations coming from forms or JSON
+  emPromocao:
+    raw.emPromocao === true ||
+    raw.emPromocao === 'true' ||
+    raw.emPromocao === '1' ||
+    raw.emPromocao === 1 ||
+    raw.emPromocao === 'on',
 
-    emPromocao:
-      raw.emPromocao === true ||
-      raw.emPromocao === 'true',
+  // promotional price: allow null/undefined or numeric string -> Number
+  precoPromocional: raw.precoPromocional === null || raw.precoPromocional === 'null'
+    ? null
+    : (raw.precoPromocional !== undefined ? Number(raw.precoPromocional) : undefined),
 
-    imagemUrl: raw.imagemUrl ?? null,
+  imagemUrl: raw.imagemUrl ?? null,
       // support multiple images arrays (from controller) or single imagemUrl/imagemPublicId
       imagemUrls: (() => {
         if (!raw.imagemUrls && !raw.imagemUrl) return undefined
@@ -38,9 +46,18 @@ export function mapProductCreateInput(raw) {
       })(),
       imagemPublicId: raw.imagemPublicId ?? null,
 
-    variacoes: raw.variacoes
-      ? {
-        create: JSON.parse(raw.variacoes).map((v) => ({
+    variacoes: (() => {
+      if (!raw.variacoes) return undefined
+      // if variacoes is already an array (bulk JSON) use it directly
+      let list = raw.variacoes
+      try {
+        if (typeof raw.variacoes === 'string') list = JSON.parse(raw.variacoes)
+      } catch (e) {
+        // if parse fails, try to proceed assuming it's already in the right shape
+      }
+      if (!Array.isArray(list)) return undefined
+      return {
+        create: list.map((v) => ({
           tipoTamanho: v.tipoTamanho,
           tamanho: v.tamanho,
           estoque: Number(v.estoque),
@@ -48,7 +65,7 @@ export function mapProductCreateInput(raw) {
           cores: v.cores
         }))
       }
-      : undefined
+    })()
   };
 }
 
@@ -69,9 +86,9 @@ export const createProductsBulk = async (products) => {
     const chunk = products.slice(i, i + BATCH_SIZE)
     // map to normalized payloads
     const ops = chunk.map(p => {
-      const payload = { ...p }
-      if (Array.isArray(p.variacoes)) payload.variacoes = { create: p.variacoes }
-      return productRepo.createProduct(payload)
+      // normalize each product using the same mapper as single-create path
+      const mapped = mapProductCreateInput(p)
+      return productRepo.createProduct(mapped)
     })
     const results = await Promise.all(ops)
     created.push(...results)
@@ -155,4 +172,8 @@ export const deleteProduct = async (id) => {
 
 export const decrementStock = async (produtoVariacaoId, amount = 1) => {
   return productRepo.decrementStock(produtoVariacaoId, amount)
+}
+
+export const incrementStock = async (produtoVariacaoId, amount = 1) => {
+  return productRepo.incrementStock(produtoVariacaoId, amount)
 }
