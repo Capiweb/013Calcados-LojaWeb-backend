@@ -23,7 +23,7 @@ export const getCart = async (userId) => {
   let total = 0
   try {
     for (const it of (cart.itens || [])) {
-      const unit = Number(it.preco ?? it.produtoVariacao?.produto?.preco ?? 0)
+      const unit = Number(it.preco ?? getEffectivePrice(it.produtoVariacao?.produto))
       const qty = Number(it.quantidade || 0)
       total += unit * qty
     }
@@ -83,7 +83,7 @@ export const createOrderFromCart = async (userId, endereco, melhorenvio_service_
         // Recalculate total and update items
         let total = 0
         const itensData = cart.itens.map((item) => {
-          const preco = Number(item.produtoVariacao.produto.preco)
+          const preco = Number(getEffectivePrice(item.produtoVariacao.produto))
           total += preco * item.quantidade
           return {
             produtoVariacaoId: item.produtoVariacaoId,
@@ -124,7 +124,7 @@ export const createOrderFromCart = async (userId, endereco, melhorenvio_service_
   // calcular total (subtotal dos items)
   let total = 0
   const itensData = cart.itens.map((item) => {
-    const preco = Number(item.produtoVariacao.produto.preco)
+    const preco = Number(getEffectivePrice(item.produtoVariacao.produto))
     total += preco * item.quantidade
     return {
       produtoVariacaoId: item.produtoVariacaoId,
@@ -1051,4 +1051,12 @@ export async function getOrders(melhorenvioShipmentId) {
   }
 
   return res.json();
+}
+
+const getEffectivePrice = (produto) => {
+  if (!produto) return 0
+  if (produto.emPromocao === true && produto.precoPromocional !== undefined && produto.precoPromocional !== null) {
+    return Number(produto.precoPromocional)
+  }
+  return Number(produto.preco || 0)
 }

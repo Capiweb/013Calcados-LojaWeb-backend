@@ -40,9 +40,15 @@ export const calculateShipping = async (userId, postalCode) => {
       throw new Error('to.postal_code inválido. Deve conter 8 dígitos numéricos.')
     }
 
+    const getEffectivePriceLocal = (produto) => {
+      if (!produto) return 0
+      if (produto.emPromocao === true && produto.precoPromocional !== undefined && produto.precoPromocional !== null) return Number(produto.precoPromocional)
+      return Number(produto.preco || 0)
+    }
+
     const products = items.flatMap(item => {
-      // insurance_value needs to be set. using price as insurance value.
-      const price = Number(item.produtoVariacao?.produto?.preco ?? 0)
+      // insurance_value needs to be set. using effective price as insurance value.
+      const price = Number(getEffectivePriceLocal(item.produtoVariacao?.produto) ?? 0)
 
       return Array.from({ length: item.quantidade }, () => ({
         weight: Number(process.env.ITEM_WEIGHT),

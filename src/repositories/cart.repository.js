@@ -47,7 +47,9 @@ export const getCartWithItems = async (usuarioId) => {
                     select: {
                       id: true,
                       nome: true,
-                      preco: true
+                      preco: true,
+                      emPromocao: true,
+                      precoPromocional: true
                     }
                   }
                 }
@@ -140,7 +142,9 @@ export const findAllCarts = async () => {
                     select: {
                       id: true,
                       nome: true,
-                      preco: true
+                      preco: true,
+                      emPromocao: true,
+                      precoPromocional: true
                     }
                   }
                 }
@@ -190,7 +194,9 @@ export const findCartById = async (id) => {
                     select: {
                       id: true,
                       nome: true,
-                      preco: true
+                      preco: true,
+                      emPromocao: true,
+                      precoPromocional: true
                     }
                   }
                 }
