@@ -14,7 +14,7 @@ export const createProduct = async (data) => {
       }
       return data.variacoes
     })()
-    if (Array.isArray(variacoesParsed)) {
+  if (Array.isArray(variacoesParsed)) {
       // sanitize each variação to allowed fields only
       const create = variacoesParsed.map(v => {
         const cores = Array.isArray(v.cores) ? v.cores : undefined
@@ -226,15 +226,29 @@ export const updateProduct = async (id, data) => {
       const existingIds = existing.map(e => e.id)
       const idsToDelete = existingIds.filter(eid => !incomingIds.includes(eid))
 
-      const nested = {}
-      if (create.length) nested.create = create
-      if (update.length) nested.update = update
-      if (idsToDelete.length) nested.deleteMany = { id: { in: idsToDelete } }
-      // if incoming array is empty and there are existingIds, delete them all
-      if (variacoesParsed.length === 0 && existingIds.length && !nested.deleteMany) {
-        nested.deleteMany = { id: { in: existingIds } }
-      }
-      payload.variacoes = nested
+      // perform operations in a transaction to avoid unique constraint issues (sku)
+      // prepare product-level payload (exclude variacoes nested operations)
+      const productPayload = { ...payload }
+      delete productPayload.variacoes
+
+      const result = await prisma.$transaction(async (tx) => {
+        // 1) delete obsolete variations
+        if (idsToDelete.length) {
+          await tx.produtoVariacao.deleteMany({ where: { id: { in: idsToDelete } } })
+        }
+        // 2) update existing
+        for (const u of update) {
+          await tx.produtoVariacao.update({ where: u.where, data: u.data })
+        }
+        // 3) create new ones (attach produtoId)
+        for (const c of create) {
+          await tx.produtoVariacao.create({ data: { ...c, produtoId: id } })
+        }
+        // 4) update produto fields (categories, name, price, imagemUrl etc.)
+        return tx.produto.update({ where: { id }, data: productPayload, include: { categorias: true, variacoes: true } })
+      })
+
+      return result
     }
 
     // Support multiple categories for update: if categoriaIds provided (array of uuids), set them
@@ -287,12 +301,17 @@ export const updateProduct = async (id, data) => {
         const existing = await prisma.produtoVariacao.findMany({ where: { produtoId: id }, select: { id: true } })
         const existingIds = existing.map(e => e.id)
         const idsToDelete = existingIds.filter(eid => !incomingIds.includes(eid))
-        const nested = {}
-        if (create.length) nested.create = create
-        if (update.length) nested.update = update
-        if (idsToDelete.length) nested.deleteMany = { id: { in: idsToDelete } }
-        if (dv.length === 0 && existingIds.length && !nested.deleteMany) nested.deleteMany = { id: { in: existingIds } }
-        safePayload.variacoes = nested
+
+        // perform transaction: delete -> update -> create -> update produto
+        const productPayload = { ...safePayload }
+        delete productPayload.variacoes
+        const result = await prisma.$transaction(async (tx) => {
+          if (idsToDelete.length) await tx.produtoVariacao.deleteMany({ where: { id: { in: idsToDelete } } })
+          for (const u of update) await tx.produtoVariacao.update({ where: u.where, data: u.data })
+          for (const c of create) await tx.produtoVariacao.create({ data: { ...c, produtoId: id } })
+          return tx.produto.update({ where: { id }, data: productPayload, include: { categorias: true, variacoes: true } })
+        })
+        return result
       } else if (data.variacoes && data.variacoes.create) {
         // if already nested, strip cores from create array
         safePayload.variacoes = { ...data.variacoes }
