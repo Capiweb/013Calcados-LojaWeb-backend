@@ -6,9 +6,17 @@ export const createProduct = async (data) => {
   try {
     // Normalize variacoes: accept either an array or already nested { create: [...] }
     const payload = { ...data }
-    if (Array.isArray(data.variacoes)) {
+    // support variacoes passed as JSON string from multipart/form-data
+    const variacoesParsed = (() => {
+      if (!data.variacoes) return undefined
+      if (typeof data.variacoes === 'string') {
+        try { return JSON.parse(data.variacoes) } catch (e) { return data.variacoes }
+      }
+      return data.variacoes
+    })()
+    if (Array.isArray(variacoesParsed)) {
       // sanitize each variação to allowed fields only
-      const create = data.variacoes.map(v => {
+      const create = variacoesParsed.map(v => {
         const cores = Array.isArray(v.cores) ? v.cores : undefined
         return {
           tipoTamanho: v.tipoTamanho,
@@ -51,23 +59,15 @@ export const createProduct = async (data) => {
       // Build safeData: support both array and nested create structures
       const safeVariacoes = (() => {
         if (!data.variacoes) return undefined
+        // attempt to parse string if necessary
+        const dv = (typeof data.variacoes === 'string') ? (() => { try { return JSON.parse(data.variacoes) } catch (e) { return data.variacoes } })() : data.variacoes
         // if variacoes is nested { create: [...] }
-        if (data.variacoes.create && Array.isArray(data.variacoes.create)) {
-          return data.variacoes.create.map(v => ({
-            tipoTamanho: v.tipoTamanho,
-            tamanho: v.tamanho,
-            estoque: v.estoque,
-            sku: v.sku
-          }))
+        if (dv && dv.create && Array.isArray(dv.create)) {
+          return dv.create.map(v => ({ tipoTamanho: v.tipoTamanho, tamanho: v.tamanho, estoque: v.estoque, sku: v.sku }))
         }
         // if variacoes is an array
-        if (Array.isArray(data.variacoes)) {
-          return data.variacoes.map(v => ({
-            tipoTamanho: v.tipoTamanho,
-            tamanho: v.tamanho,
-            estoque: v.estoque,
-            sku: v.sku
-          }))
+        if (Array.isArray(dv)) {
+          return dv.map(v => ({ tipoTamanho: v.tipoTamanho, tamanho: v.tamanho, estoque: v.estoque, sku: v.sku }))
         }
         return undefined
       })()
@@ -188,10 +188,18 @@ export const updateProduct = async (id, data) => {
   try {
     // Normalize variacoes: accept array of variacoes and convert to nested update/create
     const payload = { ...data }
-    if (Array.isArray(data.variacoes)) {
+    // support variacoes passed as JSON string from multipart/form-data
+    const variacoesParsed = (() => {
+      if (!data.variacoes) return undefined
+      if (typeof data.variacoes === 'string') {
+        try { return JSON.parse(data.variacoes) } catch (e) { return data.variacoes }
+      }
+      return data.variacoes
+    })()
+    if (Array.isArray(variacoesParsed)) {
       const create = []
       const update = []
-      for (const v of data.variacoes) {
+      for (const v of variacoesParsed) {
         const { id: vid } = v
         const cores = Array.isArray(v.cores) ? v.cores : undefined
         // sanitize: only send allowed fields to Prisma
