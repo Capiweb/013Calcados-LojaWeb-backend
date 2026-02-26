@@ -7,7 +7,18 @@ export const createProduct = async (data) => {
     // Normalize variacoes: accept either an array or already nested { create: [...] }
     const payload = { ...data }
     if (Array.isArray(data.variacoes)) {
-      payload.variacoes = { create: data.variacoes }
+      // sanitize each variação to allowed fields only
+      const create = data.variacoes.map(v => {
+        const cores = Array.isArray(v.cores) ? v.cores : undefined
+        return {
+          tipoTamanho: v.tipoTamanho,
+          tamanho: v.tamanho,
+          estoque: typeof v.estoque === 'number' ? v.estoque : (v.estoque ? Number(v.estoque) : 0),
+          sku: v.sku,
+          ...(cores ? { cores } : {})
+        }
+      })
+      payload.variacoes = { create }
     }
 
     // Support multiple categories: if categoriaIds provided (array of uuids), connect them
@@ -181,12 +192,20 @@ export const updateProduct = async (id, data) => {
       const create = []
       const update = []
       for (const v of data.variacoes) {
-        const { id: vid, cores, ...rest } = v
-        // include cores in data if present; prisma will accept it when DB has column
+        const { id: vid } = v
+        const cores = Array.isArray(v.cores) ? v.cores : undefined
+        // sanitize: only send allowed fields to Prisma
+        const sanitized = {
+          tipoTamanho: v.tipoTamanho,
+          tamanho: v.tamanho,
+          estoque: typeof v.estoque === 'number' ? v.estoque : (v.estoque ? Number(v.estoque) : undefined),
+          sku: v.sku,
+          ...(cores ? { cores } : {})
+        }
         if (vid) {
-          update.push({ where: { id: vid }, data: { ...rest, ...(cores ? { cores } : {}) } })
+          update.push({ where: { id: vid }, data: sanitized })
         } else {
-          create.push({ ...rest, ...(cores ? { cores } : {}) })
+          create.push(sanitized)
         }
       }
       const nested = {}
@@ -231,9 +250,17 @@ export const updateProduct = async (id, data) => {
           const create = []
           const update = []
           for (const v of data.variacoes) {
-            const { id: vid, cores, ...rest } = v
-            if (vid) update.push({ where: { id: vid }, data: rest })
-            else create.push(rest)
+            const { id: vid } = v
+            const cores = Array.isArray(v.cores) ? v.cores : undefined
+            const sanitized = {
+              tipoTamanho: v.tipoTamanho,
+              tamanho: v.tamanho,
+              estoque: typeof v.estoque === 'number' ? v.estoque : (v.estoque ? Number(v.estoque) : undefined),
+              sku: v.sku,
+              ...(cores ? { cores } : {})
+            }
+            if (vid) update.push({ where: { id: vid }, data: sanitized })
+            else create.push(sanitized)
           }
           const nested = {}
           if (create.length) nested.create = create
@@ -241,13 +268,30 @@ export const updateProduct = async (id, data) => {
           base.variacoes = nested
         } else if (data.variacoes && data.variacoes.create) {
           // if already nested, strip cores from create array
+          // sanitize nested create/update arrays to allowed fields
           base.variacoes = { ...data.variacoes }
-          base.variacoes.create = base.variacoes.create.map(v => {
-            const { cores, ...rest } = v
-            return rest
+          base.variacoes.create = (base.variacoes.create || []).map(v => {
+            const cores = Array.isArray(v.cores) ? v.cores : undefined
+            return {
+              tipoTamanho: v.tipoTamanho,
+              tamanho: v.tamanho,
+              estoque: typeof v.estoque === 'number' ? v.estoque : (v.estoque ? Number(v.estoque) : undefined),
+              sku: v.sku,
+              ...(cores ? { cores } : {})
+            }
           })
           if (base.variacoes.update) {
-            base.variacoes.update = base.variacoes.update.map(u => ({ where: u.where, data: (() => { const { cores, ...rest } = u.data; return rest })() }))
+            base.variacoes.update = base.variacoes.update.map(u => ({ where: u.where, data: (() => {
+              const v = u.data
+              const cores = Array.isArray(v.cores) ? v.cores : undefined
+              return {
+                tipoTamanho: v.tipoTamanho,
+                tamanho: v.tamanho,
+                estoque: typeof v.estoque === 'number' ? v.estoque : (v.estoque ? Number(v.estoque) : undefined),
+                sku: v.sku,
+                ...(cores ? { cores } : {})
+              }
+            })() } ))
           }
         }
         return base
