@@ -195,6 +195,22 @@ export const updateProduct = async (id, data) => {
       payload.variacoes = nested
     }
 
+    // Support multiple categories for update: if categoriaIds provided (array of uuids), set them
+    if (payload.categoriaIds && Array.isArray(payload.categoriaIds)) {
+      // use `set` to replace existing relations with the provided ones
+      payload.categorias = { set: payload.categoriaIds.map(id => ({ id })) }
+      delete payload.categoriaIds
+    } else if (payload.categoriaId) {
+      payload.categorias = { set: [{ id: payload.categoriaId }] }
+      delete payload.categoriaId
+    }
+
+    // Ensure imagemUrl (required in schema) is set: prefer first imagemUrls
+    if (!payload.imagemUrl) {
+      if (Array.isArray(payload.imagemUrls) && payload.imagemUrls.length) payload.imagemUrl = payload.imagemUrls[0]
+      else payload.imagemUrl = undefined
+    }
+
     return await prisma.produto.update({
       where: { id },
       data: payload,
@@ -236,7 +252,21 @@ export const updateProduct = async (id, data) => {
         }
         return base
       })()
-  return prisma.produto.update({ where: { id }, data: safePayload, include: { categorias: true, variacoes: true } })
+      // also normalize categories in the safePayload (same logic as above)
+      if (safePayload.categoriaIds && Array.isArray(safePayload.categoriaIds)) {
+        safePayload.categorias = { set: safePayload.categoriaIds.map(id => ({ id })) }
+        delete safePayload.categoriaIds
+      } else if (safePayload.categoriaId) {
+        safePayload.categorias = { set: [{ id: safePayload.categoriaId }] }
+        delete safePayload.categoriaId
+      }
+      // ensure imagemUrl fallback
+      if (!safePayload.imagemUrl) {
+        if (Array.isArray(safePayload.imagemUrls) && safePayload.imagemUrls.length) safePayload.imagemUrl = safePayload.imagemUrls[0]
+        else safePayload.imagemUrl = undefined
+      }
+
+      return prisma.produto.update({ where: { id }, data: safePayload, include: { categorias: true, variacoes: true } })
     }
     throw err
   }

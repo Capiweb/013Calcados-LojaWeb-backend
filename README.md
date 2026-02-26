@@ -172,14 +172,14 @@ Notas importantes:
 
 - GET /api/products/:id
   - Path param: id (uuid)
-  - Retorna produto completo com `categoria` e `variacoes`.
+  - Retorna produto completo com `categorias` (array) e `variacoes`.
   - Cada variação contém: { id, tipoTamanho, tamanho, estoque, sku, cores: string[] }
   - Exemplo de resposta: veja seção "Mudança no schema" no README.
   - Autenticação: pública
 
 - POST /api/products
   - Body (JSON) exemplo (ver `ProductCreate` schema no Swagger):
-    - nome, descricao, preco, slug, imagemUrl, categoriaId (uuid), variacoes: [ { tipoTamanho, tamanho, estoque, sku, cores?: [] } ]
+    - nome, descricao, preco, slug, imagemUrl, categoriaIds (array de uuids) ou `categoriaId` (uuid, compatibilidade legada), variacoes: [ { tipoTamanho, tamanho, estoque, sku, cores?: [] } ]
   - Resposta: 201 com objeto criado
   - Autenticação: Bearer token com papel ADMIN
 
@@ -187,8 +187,43 @@ Notas importantes:
   - Body: array de `ProductCreate` — tudo é criado em transação (ou aborta em erro)
   - Autenticação: ADMIN
 
+  - Exemplos de uso (criar produto com múltiplas categorias):
+
+    JSON (application/json):
+
+    ```bash
+    curl -X POST http://localhost:3000/api/products \
+      -H "Authorization: Bearer $TOKEN" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "nome": "Tênis X",
+        "descricao": "...",
+        "preco": 199.99,
+        "slug": "tenis-x",
+        "imagemUrl": "https://...",
+        "categoriaIds": ["ec978b1e-d3e9-42d9-9633-eab1f78c0dcf","aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"],
+        "variacoes": [{ "tipoTamanho": "NUMERICO", "tamanho": "40", "estoque": 10, "sku": "TENX-40", "cores": ["preto"] }]
+      }'
+    ```
+
+    Multipart/form-data (com upload de imagens):
+
+    ```bash
+    curl -X POST 'http://localhost:3000/api/products' \
+      -H "Authorization: Bearer $TOKEN" \
+      -F 'nome=Tênis MultiCat' \
+      -F 'descricao=Exemplo com múltiplas categorias' \
+      -F 'preco=299.90' \
+      -F 'slug=tenis-multicat' \
+      -F 'categoriaIds[]=ec978b1e-d3e9-42d9-9633-eab1f78c0dcf' \
+      -F 'categoriaIds[]=bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb' \
+      -F 'variacoes=[{"tipoTamanho":"NUMERICO","tamanho":"40","estoque":10,"sku":"TM-40"}]' \
+      -F 'image=@/caminho/para/img1.jpg' \
+      -F 'image=@/caminho/para/img2.jpg'
+    ```
+
 - PUT /api/products/:id
-  - Body: campos a atualizar (produto e/ou variacoes). Nota: atualmente a atualização de variações é direta; ao enviar `variacoes` considere a estratégia de sincronização (implementar se necessário).
+  - Body: campos a atualizar (produto e/ou variacoes). Para alterar as categorias de um produto envie `categoriaIds` no body com o array atualizado (ex: `{ "categoriaIds": ["uuid1","uuid2"] }`). Nota: atualmente a atualização de variações é direta; ao enviar `variacoes` considere a estratégia de sincronização (implementar se necessário).
   - Autenticação: ADMIN
 
 - DELETE /api/products/:id
