@@ -72,7 +72,7 @@ export const checkout = async (req, res) => {
   // category_id for MP: prefer first category slug if available
   category_id: (p.categorias && p.categorias.length && p.categorias[0].slug) ? p.categorias[0].slug : (p.categoriaId || undefined),
         quantity: Number(it.quantidade) || 1,
-        unit_price: Number(it.preco ?? p.preco ?? 0),
+  unit_price: Number(it.preco ?? (p && p.emPromocao === true && p.precoPromocional !== undefined && p.precoPromocional !== null ? p.precoPromocional : p.preco) ?? 0),
         currency_id: 'BRL'
       }
     })
