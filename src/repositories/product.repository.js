@@ -196,6 +196,15 @@ export const updateProduct = async (id, data) => {
   try {
     // Normalize variacoes: accept array of variacoes and convert to nested update/create
     const payload = { ...data }
+    // Normalize categories early so we never pass `categoriaIds` directly to Prisma.
+    // This is important for the transactional variacoes flow below.
+    if (payload.categoriaIds && Array.isArray(payload.categoriaIds)) {
+      payload.categorias = { set: payload.categoriaIds.map(id => ({ id })) }
+      delete payload.categoriaIds
+    } else if (payload.categoriaId) {
+      payload.categorias = { set: [{ id: payload.categoriaId }] }
+      delete payload.categoriaId
+    }
     // support variacoes passed as JSON string from multipart/form-data
     const variacoesParsed = (() => {
       if (!data.variacoes) return undefined
@@ -259,15 +268,6 @@ export const updateProduct = async (id, data) => {
       return result
     }
 
-    // Support multiple categories for update: if categoriaIds provided (array of uuids), set them
-    if (payload.categoriaIds && Array.isArray(payload.categoriaIds)) {
-      // use `set` to replace existing relations with the provided ones
-      payload.categorias = { set: payload.categoriaIds.map(id => ({ id })) }
-      delete payload.categoriaIds
-    } else if (payload.categoriaId) {
-      payload.categorias = { set: [{ id: payload.categoriaId }] }
-      delete payload.categoriaId
-    }
 
     // Ensure imagemUrl (required in schema) is set: prefer first imagemUrls
     if (!payload.imagemUrl) {
