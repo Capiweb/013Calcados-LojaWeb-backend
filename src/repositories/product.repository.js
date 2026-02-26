@@ -197,12 +197,17 @@ export const updateProduct = async (id, data) => {
       return data.variacoes
     })()
     if (Array.isArray(variacoesParsed)) {
+      // if client provided an array (possibly empty) we treat it as the source of truth:
+      // - items with id -> update
+      // - items without id -> create
+      // - existing items not present in the sent array -> delete
       const create = []
       const update = []
+      const incomingIds = []
       for (const v of variacoesParsed) {
-        const { id: vid } = v
+        const vid = v.id
+        if (vid) incomingIds.push(vid)
         const cores = Array.isArray(v.cores) ? v.cores : undefined
-        // sanitize: only send allowed fields to Prisma
         const sanitized = {
           tipoTamanho: v.tipoTamanho,
           tamanho: v.tamanho,
@@ -216,9 +221,19 @@ export const updateProduct = async (id, data) => {
           create.push(sanitized)
         }
       }
+      // compute deletions: existing variation ids not present in incomingIds
+      const existing = await prisma.produtoVariacao.findMany({ where: { produtoId: id }, select: { id: true } })
+      const existingIds = existing.map(e => e.id)
+      const idsToDelete = existingIds.filter(eid => !incomingIds.includes(eid))
+
       const nested = {}
       if (create.length) nested.create = create
       if (update.length) nested.update = update
+      if (idsToDelete.length) nested.deleteMany = { id: { in: idsToDelete } }
+      // if incoming array is empty and there are existingIds, delete them all
+      if (variacoesParsed.length === 0 && existingIds.length && !nested.deleteMany) {
+        nested.deleteMany = { id: { in: existingIds } }
+      }
       payload.variacoes = nested
     }
 
@@ -249,61 +264,43 @@ export const updateProduct = async (id, data) => {
   } catch (err) {
     if (err?.code === 'P2022' || (err?.message && err.message.includes('ProdutoVariacao.cores'))) {
       // remove cores from any nested variacoes payload before retry
-      const safePayload = (() => {
-        // start from previously normalized payload if available
-        const base = { ...data }
-        // if original data was array, it was transformed above to nested in `payload`
-        // try to reconstruct nested shape without cores
-        if (Array.isArray(data.variacoes)) {
-          const create = []
-          const update = []
-          for (const v of data.variacoes) {
-            const { id: vid } = v
-            const cores = Array.isArray(v.cores) ? v.cores : undefined
-            const sanitized = {
-              tipoTamanho: v.tipoTamanho,
-              tamanho: v.tamanho,
-              estoque: typeof v.estoque === 'number' ? v.estoque : (v.estoque ? Number(v.estoque) : undefined),
-              sku: v.sku,
-              ...(cores ? { cores } : {})
-            }
-            if (vid) update.push({ where: { id: vid }, data: sanitized })
-            else create.push(sanitized)
+      // build safePayload using async-friendly flow (we may need to query existing variacoes)
+      let safePayload = { ...data }
+      // attempt to transform variacoes similar to the normal flow but without cores
+      const dv = (typeof data.variacoes === 'string') ? (() => { try { return JSON.parse(data.variacoes) } catch (e) { return data.variacoes } })() : data.variacoes
+      if (Array.isArray(dv)) {
+        const create = []
+        const update = []
+        const incomingIds = []
+        for (const v of dv) {
+          const vid = v.id
+          if (vid) incomingIds.push(vid)
+          const sanitized = {
+            tipoTamanho: v.tipoTamanho,
+            tamanho: v.tamanho,
+            estoque: typeof v.estoque === 'number' ? v.estoque : (v.estoque ? Number(v.estoque) : undefined),
+            sku: v.sku
           }
-          const nested = {}
-          if (create.length) nested.create = create
-          if (update.length) nested.update = update
-          base.variacoes = nested
-        } else if (data.variacoes && data.variacoes.create) {
-          // if already nested, strip cores from create array
-          // sanitize nested create/update arrays to allowed fields
-          base.variacoes = { ...data.variacoes }
-          base.variacoes.create = (base.variacoes.create || []).map(v => {
-            const cores = Array.isArray(v.cores) ? v.cores : undefined
-            return {
-              tipoTamanho: v.tipoTamanho,
-              tamanho: v.tamanho,
-              estoque: typeof v.estoque === 'number' ? v.estoque : (v.estoque ? Number(v.estoque) : undefined),
-              sku: v.sku,
-              ...(cores ? { cores } : {})
-            }
-          })
-          if (base.variacoes.update) {
-            base.variacoes.update = base.variacoes.update.map(u => ({ where: u.where, data: (() => {
-              const v = u.data
-              const cores = Array.isArray(v.cores) ? v.cores : undefined
-              return {
-                tipoTamanho: v.tipoTamanho,
-                tamanho: v.tamanho,
-                estoque: typeof v.estoque === 'number' ? v.estoque : (v.estoque ? Number(v.estoque) : undefined),
-                sku: v.sku,
-                ...(cores ? { cores } : {})
-              }
-            })() } ))
-          }
+          if (vid) update.push({ where: { id: vid }, data: sanitized })
+          else create.push(sanitized)
         }
-        return base
-      })()
+        const existing = await prisma.produtoVariacao.findMany({ where: { produtoId: id }, select: { id: true } })
+        const existingIds = existing.map(e => e.id)
+        const idsToDelete = existingIds.filter(eid => !incomingIds.includes(eid))
+        const nested = {}
+        if (create.length) nested.create = create
+        if (update.length) nested.update = update
+        if (idsToDelete.length) nested.deleteMany = { id: { in: idsToDelete } }
+        if (dv.length === 0 && existingIds.length && !nested.deleteMany) nested.deleteMany = { id: { in: existingIds } }
+        safePayload.variacoes = nested
+      } else if (data.variacoes && data.variacoes.create) {
+        // if already nested, strip cores from create array
+        safePayload.variacoes = { ...data.variacoes }
+        safePayload.variacoes.create = (safePayload.variacoes.create || []).map(v => ({ tipoTamanho: v.tipoTamanho, tamanho: v.tamanho, estoque: typeof v.estoque === 'number' ? v.estoque : (v.estoque ? Number(v.estoque) : undefined), sku: v.sku }))
+        if (safePayload.variacoes.update) {
+          safePayload.variacoes.update = safePayload.variacoes.update.map(u => ({ where: u.where, data: (() => { const v = u.data; return { tipoTamanho: v.tipoTamanho, tamanho: v.tamanho, estoque: typeof v.estoque === 'number' ? v.estoque : (v.estoque ? Number(v.estoque) : undefined), sku: v.sku } })() }))
+        }
+      }
       // also normalize categories in the safePayload (same logic as above)
       if (safePayload.categoriaIds && Array.isArray(safePayload.categoriaIds)) {
         safePayload.categorias = { set: safePayload.categoriaIds.map(id => ({ id })) }
