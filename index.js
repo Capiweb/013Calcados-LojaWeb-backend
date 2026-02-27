@@ -26,7 +26,7 @@ const app = express()
 
 // Allow configuring max body size via env (in MB). Default to 50MB which
 // covers multipart/base64 product creations with multiple images.
-const BODY_LIMIT_MB = process.env.BODY_LIMIT_MB ? Number(process.env.BODY_LIMIT_MB) : 50
+const BODY_LIMIT_MB = process.env.BODY_LIMIT_MB ? Number(process.env.BODY_LIMIT_MB) : 100
 
 // CORS configuration
 // Allow configuring a comma-separated list of allowed origins via CORS_ORIGINS
@@ -139,6 +139,28 @@ app.use('/webhooks', webhookRoutes)
 
 // Debug / util
 app.use('/debug', debugRoutes)
+
+// Global error handler: catch payload-too-large from body-parser/express or Multer
+app.use((err, req, res, next) => {
+  try {
+    // Multer file size error: err.code === 'LIMIT_FILE_SIZE'
+    if (err && (err.code === 'LIMIT_FILE_SIZE' || err.code === 'LIMIT_PART_COUNT' || err.code === 'LIMIT_FILE_COUNT')) {
+      console.warn('Upload rejected - file too large or too many files', err.code)
+      return res.status(413).json({ error: 'Arquivo muito grande. Aumente UPLOAD_MAX_FILE_MB ou envie um arquivo menor.' })
+    }
+
+    // body-parser / express PayloadTooLargeError
+    if (err && (err.type === 'entity.too.large' || err.status === 413)) {
+      console.warn('Request rejected - payload too large')
+      return res.status(413).json({ error: 'Payload muito grande. Aumente BODY_LIMIT_MB ou envie um payload menor.' })
+    }
+
+    // If it's not a payload size error, forward to default error handler
+    return next(err)
+  } catch (e) {
+    return next(err)
+  }
+})
 
 
 const PORT = process.env.PORT || 3000
