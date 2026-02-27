@@ -15,11 +15,12 @@ export const createProduct = async (data) => {
       return data.variacoes
     })()
     // Normalize categories early so transactions don't receive categoriaIds
+    // Use `connect` for create operations (`set` is not valid in create payloads)
     if (payload.categoriaIds && Array.isArray(payload.categoriaIds)) {
-      payload.categorias = { set: payload.categoriaIds.map(id => ({ id })) }
+      payload.categorias = { connect: payload.categoriaIds.map(id => ({ id })) }
       delete payload.categoriaIds
     } else if (payload.categoriaId) {
-      payload.categorias = { set: [{ id: payload.categoriaId }] }
+      payload.categorias = { connect: [{ id: payload.categoriaId }] }
       delete payload.categoriaId
     }
   if (Array.isArray(variacoesParsed)) {
