@@ -24,6 +24,10 @@ import cron from 'node-cron'
 
 const app = express()
 
+// Allow configuring max body size via env (in MB). Default to 50MB which
+// covers multipart/base64 product creations with multiple images.
+const BODY_LIMIT_MB = process.env.BODY_LIMIT_MB ? Number(process.env.BODY_LIMIT_MB) : 50
+
 // CORS configuration
 // Allow configuring a comma-separated list of allowed origins via CORS_ORIGINS
 // Example for local dev: CORS_ORIGINS="http://127.0.0.1:5500,http://localhost:5500"
@@ -87,8 +91,8 @@ if (process.env.NODE_ENV === 'production') {
   app.use(cors({ origin: true, credentials: true }))
 }
 // Allow larger request bodies for bulk operations (products, uploads base64)
-app.use(express.json({ limit: '10mb' }))
-app.use(express.urlencoded({ extended: true, limit: '10mb' }))
+app.use(express.json({ limit: `${BODY_LIMIT_MB}mb` }))
+app.use(express.urlencoded({ extended: true, limit: `${BODY_LIMIT_MB}mb` }))
 app.use(cookieParser())
 
 // Documentação Swagger

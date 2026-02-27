@@ -13,7 +13,10 @@ const getUploadInstance = async () => {
 			const multerModule = await import(spec)
 			const multer = multerModule.default || multerModule
 		const storage = multer.memoryStorage()
-		uploadInstance = multer({ storage })
+		// Allow configuring per-file upload limit via env (in MB). Default 25MB.
+		const UPLOAD_MAX_FILE_MB = process.env.UPLOAD_MAX_FILE_MB ? Number(process.env.UPLOAD_MAX_FILE_MB) : 25
+		const limits = { fileSize: UPLOAD_MAX_FILE_MB * 1024 * 1024 }
+		uploadInstance = multer({ storage, limits })
 		return uploadInstance
 	} catch (err) {
 		// rethrow so callers can handle and return a friendly error
