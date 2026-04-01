@@ -125,7 +125,7 @@ export const update = async (req, res) => {
           try { await deleteFromCloudinary(existing.imagemPublicId) } catch (e) { /* swallow */ }
         }
       } catch (err) {
-        console.error('Erro ao apagar imagem antiga do Cloudinary', err)
+        console.error('Erro ao apagar imagem antiga no ImageKit', err)
       }
     }
 
@@ -145,7 +145,7 @@ export const remove = async (req, res) => {
       const existing = await productService.getProductById(id)
       if (existing && existing.imagemPublicId) await deleteFromCloudinary(existing.imagemPublicId)
     } catch (err) {
-      console.error('Erro ao apagar imagem no Cloudinary antes de deletar produto', err)
+      console.error('Erro ao apagar imagem no ImageKit antes de deletar produto', err)
     }
 
     await productService.deleteProduct(id)
