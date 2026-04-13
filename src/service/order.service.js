@@ -933,9 +933,10 @@ export const startShipmentPurchaseJob = async (pedidoId, attempt = 0) => {
         to: {
           name: user.nome,
           email: user.email,
-          // phone: pedido.telefone,
+          phone: user.telefone || pedido.telefone || '',
           address: pedido.rua,
           number: pedido.numero,
+          complement: pedido.complemento || null,
           district: pedido.bairro,
           city: pedido.cidade,
           state_abbr: pedido.estado,

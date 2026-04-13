@@ -66,6 +66,7 @@ export const getOrderFullById = async (id) => {
         select: {
           id: true,
           nome: true,
+          telefone: true,
           email: true,
           papel: true,
           criadoEm: true
