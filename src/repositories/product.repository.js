@@ -350,6 +350,8 @@ export const updateProduct = async (id, data) => {
 }
 
 export const deleteProduct = async (id) => {
+  // Apaga feedbacks relacionados antes de deletar o produto (FK constraint)
+  await prisma.feedback.deleteMany({ where: { produtoId: id } })
   return prisma.produto.delete({ where: { id } })
 }
 

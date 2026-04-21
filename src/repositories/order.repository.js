@@ -159,6 +159,11 @@ export const deleteOrderById = async (id) => {
     // ignore if no payment
   }
   try {
+    await prisma.pagamento.deleteMany({ where: { pedidoId: id } })
+  } catch (e) {
+    // ignore
+  }
+  try {
     await prisma.pedidoItem.deleteMany({ where: { pedidoId: id } })
   } catch (e) {
     // ignore
