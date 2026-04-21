@@ -64,4 +64,15 @@ export const deleteFromCloudinary = async (publicId) => {
   }
 }
 
+/**
+ * Delete multiple files from ImageKit in parallel.
+ * Silently ignores errors for individual files (e.g. already deleted or
+ * legacy Cloudinary public_ids that ImageKit doesn't recognise).
+ * @param {string[]} publicIds - array of ImageKit fileIds to delete
+ */
+export const deleteMultipleFromCloudinary = async (publicIds) => {
+  if (!Array.isArray(publicIds) || publicIds.length === 0) return
+  await Promise.allSettled(publicIds.map((id) => deleteFromCloudinary(id)))
+}
+
 export default getCloudinary

@@ -1,5 +1,5 @@
 import * as productService from '../service/product.service.js'
-import { uploadToCloudinary, deleteFromCloudinary } from '../utils/cloudinary.js'
+import { uploadToCloudinary, deleteFromCloudinary, deleteMultipleFromCloudinary } from '../utils/cloudinary.js'
 
 export const create = async (req, res) => {
   try {
@@ -82,51 +82,76 @@ export const getById = async (req, res) => {
 export const update = async (req, res) => {
   try {
     const { id } = req.params
-  const data = { ...req.body }
-  if (data.categoriaId && !data.categoriaIds) data.categoriaIds = [data.categoriaId]
-    // handle up to 6 new uploaded images
-    data.imagemUrls = data.imagemUrls || []
-    data.imagemPublicIds = data.imagemPublicIds || []
+    const data = { ...req.body }
+    if (data.categoriaId && !data.categoriaIds) data.categoriaIds = [data.categoriaId]
+
     const files = req.files && Array.isArray(req.files) ? req.files.slice(0, 6) : (req.file ? [req.file] : [])
-    if (files.length) {
-      for (const f of files.slice(0, 6)) {
-        if (f && f.buffer) {
-          const uploaded = await uploadToCloudinary(f.buffer)
+
+    // Determine if this request actually contains image data.
+    // Only when images are involved should we touch imagemUrls/imagemPublicIds in the DB.
+    // If this is a plain JSON PUT (product text fields only), we must NOT overwrite image
+    // fields — otherwise the first JSON step would clear imagemPublicIds and the second
+    // FormData step would find nothing to diff/delete.
+    const imagemModified = data.imagemModified === '1' || data.imagemModified === 1
+    delete data.imagemModified  // strip before passing to Prisma
+
+    const hasExplicitImageData =
+      files.length > 0 ||
+      (Array.isArray(data.imagemBase64) && data.imagemBase64.length > 0) ||
+      data.imagemUrl ||
+      (Array.isArray(data.imagemUrls) && data.imagemUrls.length > 0) ||
+      (Array.isArray(data['imagemUrls[]']) && data['imagemUrls[]'].length > 0) ||
+      imagemModified
+
+    if (hasExplicitImageData) {
+      // handle up to 6 new uploaded images
+      data.imagemUrls = data.imagemUrls || []
+      data.imagemPublicIds = data.imagemPublicIds || []
+
+      if (files.length) {
+        for (const f of files.slice(0, 6)) {
+          if (f && f.buffer) {
+            const uploaded = await uploadToCloudinary(f.buffer)
+            data.imagemUrls.push(uploaded.secure_url)
+            data.imagemPublicIds.push(uploaded.public_id)
+          }
+        }
+      } else if (Array.isArray(data.imagemBase64) && data.imagemBase64.length) {
+        for (const item of data.imagemBase64.slice(0, 6)) {
+          const matches = String(item || '').match(/data:(image\/[a-zA-Z]+);base64,(.*)$/)
+          let b64 = item
+          if (matches) b64 = matches[2]
+          const buffer = Buffer.from(b64, 'base64')
+          const uploaded = await uploadToCloudinary(buffer)
           data.imagemUrls.push(uploaded.secure_url)
           data.imagemPublicIds.push(uploaded.public_id)
         }
+        delete data.imagemBase64
+      } else if (data.imagemUrl) {
+        data.imagemUrls.push(data.imagemUrl)
+        if (data.imagemPublicId) data.imagemPublicIds.push(data.imagemPublicId)
       }
-    } else if (Array.isArray(data.imagemBase64) && data.imagemBase64.length) {
-      for (const item of data.imagemBase64.slice(0, 6)) {
-        const matches = String(item || '').match(/data:(image\/[a-zA-Z]+);base64,(.*)$/)
-        let b64 = item
-        if (matches) b64 = matches[2]
-        const buffer = Buffer.from(b64, 'base64')
-        const uploaded = await uploadToCloudinary(buffer)
-        data.imagemUrls.push(uploaded.secure_url)
-        data.imagemPublicIds.push(uploaded.public_id)
-      }
-      delete data.imagemBase64
-    } else if (data.imagemUrl) {
-      data.imagemUrls.push(data.imagemUrl)
-      if (data.imagemPublicId) data.imagemPublicIds.push(data.imagemPublicId)
-    }
 
-    // delete old images if we replaced them (imagemPublicIds present)
-    if (data.imagemPublicIds && data.imagemPublicIds.length) {
+      // Delete only images that were removed (not present in the new set).
+      // data.imagemPublicIds contains kept IDs + newly uploaded IDs.
       try {
         const existing = await productService.getProductById(id)
+        const newIdSet = new Set(data.imagemPublicIds)
         if (existing && Array.isArray(existing.imagemPublicIds)) {
-          for (const pid of existing.imagemPublicIds) {
-            try { await deleteFromCloudinary(pid) } catch (e) { /* swallow */ }
-          }
-        } else if (existing && existing.imagemPublicId) {
-          // fallback for older records
+          const toDelete = existing.imagemPublicIds.filter((pid) => pid && !newIdSet.has(pid))
+          if (toDelete.length) await deleteMultipleFromCloudinary(toDelete)
+        } else if (existing && existing.imagemPublicId && !newIdSet.has(existing.imagemPublicId)) {
           try { await deleteFromCloudinary(existing.imagemPublicId) } catch (e) { /* swallow */ }
         }
       } catch (err) {
-        console.error('Erro ao apagar imagem antiga no ImageKit', err)
+        console.error('Erro ao apagar imagens antigas no ImageKit', err)
       }
+    } else {
+      // No image data in this request → strip image fields so Prisma doesn't touch them
+      delete data.imagemUrls
+      delete data.imagemPublicIds
+      delete data.imagemUrl
+      delete data.imagemPublicId
     }
 
     const produto = await productService.updateProduct(id, data)
@@ -140,12 +165,18 @@ export const update = async (req, res) => {
 export const remove = async (req, res) => {
   try {
     const { id } = req.params
-    // delete image from cloudinary if present
+    // Delete all associated images from ImageKit before removing the product record.
     try {
       const existing = await productService.getProductById(id)
-      if (existing && existing.imagemPublicId) await deleteFromCloudinary(existing.imagemPublicId)
+      if (existing) {
+        // Prefer the imagemPublicIds array; fall back to the legacy single field.
+        const idsToDelete = Array.isArray(existing.imagemPublicIds) && existing.imagemPublicIds.length
+          ? existing.imagemPublicIds
+          : (existing.imagemPublicId ? [existing.imagemPublicId] : [])
+        if (idsToDelete.length) await deleteMultipleFromCloudinary(idsToDelete)
+      }
     } catch (err) {
-      console.error('Erro ao apagar imagem no ImageKit antes de deletar produto', err)
+      console.error('Erro ao apagar imagens no ImageKit antes de deletar produto', err)
     }
 
     await productService.deleteProduct(id)
