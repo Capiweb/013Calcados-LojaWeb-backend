@@ -623,7 +623,7 @@ export const handleMpNotification = async (body) => {
 
       await orderRepo.updateOrderStatus(pedido.id, 'PAGO')
       await cartRepo.clearCart(pedido.usuarioId)
-      await startShipmentPurchaseJob(pedido.id)
+      // purchaseShipment is handled manually — label purchase removed from automatic flow
     }
 
     if (pedido) {
@@ -1002,17 +1002,71 @@ export const addFreightToOrder = async (orderId, freteValue) => {
   return orderRepo.getOrderById(orderId)
 }
 
+/**
+ * syncTracking — runs on cron (every hour).
+ * Uses POST /v2/me/shipment/tracking (batch) to check all active orders at once.
+ * ME statuses: pending → released → posted → delivered | undelivered | suspended
+ *   pending   = in cart, label not purchased yet
+ *   released  = label purchased, tracking code assigned
+ *   posted    = shipped (posted at carrier)
+ *   delivered = delivered to recipient
+ */
 export const syncTracking = async () => {
   const orders = await orderRepo.getOrdersWithShipmentId()
+  if (orders.length === 0) return
+
+  const shipmentIds = orders.map(o => o.melhorenvio_shipment_id)
+
+  let trackingMap = {}
+  try {
+    // Batch call — one request for all orders
+    const batchResult = await shippingService.getTrackingBatch(shipmentIds)
+    // ME returns an object keyed by shipment ID
+    if (batchResult && typeof batchResult === 'object') {
+      trackingMap = batchResult
+    }
+  } catch (err) {
+    console.error('syncTracking: getTrackingBatch failed:', err.message)
+    return
+  }
 
   for (const order of orders) {
     try {
-      const tracking = await getOrders(order.melhorenvio_shipment_id)
-      await orderRepo.updateOrderShippingInfo(order.id, {
-        tracking_number: tracking.tracking,
-      })
+      const info = trackingMap[order.melhorenvio_shipment_id]
+      if (!info) {
+        // ID not found in ME — label still pending or not yet purchased
+        continue
+      }
+
+      const meStatus = info.status || null
+      // ME returns the carrier tracking code in the `tracking` field
+      const trackingCode = info.tracking || null
+
+      const shippingUpdate = {}
+
+      if (meStatus) {
+        shippingUpdate.shipping_status = meStatus
+      }
+
+      // Save tracking code as soon as ME assigns one (released or later)
+      if (trackingCode && !order.tracking_number) {
+        shippingUpdate.tracking_number = trackingCode
+      }
+
+      if (Object.keys(shippingUpdate).length > 0) {
+        await orderRepo.updateOrderShippingInfo(order.id, shippingUpdate)
+      }
+
+      // Map ME delivery status to our order status
+      if (meStatus === 'delivered' && order.status !== 'ENTREGUE') {
+        await orderRepo.updateOrderStatus(order.id, 'ENTREGUE')
+        console.log(`syncTracking: pedido ${order.id} → ENTREGUE (tracking: ${trackingCode})`)
+      } else if (meStatus === 'posted' && order.status === 'PAGO') {
+        await orderRepo.updateOrderStatus(order.id, 'ENVIADO')
+        console.log(`syncTracking: pedido ${order.id} → ENVIADO (tracking: ${trackingCode})`)
+      }
     } catch (error) {
-      console.error(`Error syncing tracking for order ${order.id}:`, error.message)
+      console.error(`syncTracking: erro no pedido ${order.id}:`, error.message)
     }
   }
 }

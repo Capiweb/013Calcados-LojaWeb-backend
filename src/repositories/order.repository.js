@@ -217,13 +217,12 @@ export const deletePaymentsByUserId = async (usuarioId) => {
 export const getOrdersWithShipmentId = async () => {
   return prisma.pedido.findMany({
     where: {
-      melhorenvio_shipment_id: {
-        not: null
-      },
-      tracking_number: null
+      melhorenvio_shipment_id: { not: null },
+      status: { notIn: ['ENTREGUE', 'CANCELADO'] }
     },
     select: {
       id: true,
+      status: true,
       melhorenvio_shipment_id: true,
       tracking_number: true,
       shipping_status: true,

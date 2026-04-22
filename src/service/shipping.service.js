@@ -179,17 +179,59 @@ export const purchaseShipment = async () => {
 
 
 
+/**
+ * GET /v2/me/orders/{id}
+ * Returns full label info including tracking code and status.
+ * Official ME docs: https://docs.melhorenvio.com.br/reference/listar-informacoes-de-uma-etiqueta
+ */
 export const getShipment = async (shipmentId) => {
   const token = MELHOR_ENVIO_TOKEN
   if (!token) throw new Error('Nenhum token Melhor Envio disponível')
-  const raw = process.env.MELHOR_ENVIO_GET_URL || MELHOR_ENVIO_GET_URL
-  const url = raw.replace('{shipment_id}', shipmentId)
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } })
+  const baseUrl = process.env.MELHOR_ENVIO_BASE_URL || 'https://melhorenvio.com.br'
+  const url = `${baseUrl}/api/v2/me/orders/${shipmentId}`
+  const userAgent = `${process.env.MELHOR_ENVIO_FROM_NAME} (${process.env.MELHOR_ENVIO_FROM_EMAIL})`
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}`, Accept: 'application/json', 'User-Agent': userAgent }
+  })
   const text = await res.text()
   let data
   try { data = JSON.parse(text) } catch (e) { data = text }
   if (!res.ok) {
     const err = new Error('getShipment failed')
+    err.status = res.status
+    err.body = data
+    throw err
+  }
+  return data
+}
+
+/**
+ * POST /v2/me/shipment/tracking
+ * Batch tracking status for multiple orders at once.
+ * Body: { orders: ["id1", "id2", ...] }
+ * Official ME docs: https://docs.melhorenvio.com.br/reference/rastreio-de-envios
+ */
+export const getTrackingBatch = async (shipmentIds) => {
+  const token = MELHOR_ENVIO_TOKEN
+  if (!token) throw new Error('Nenhum token Melhor Envio disponível')
+  const baseUrl = process.env.MELHOR_ENVIO_BASE_URL || 'https://melhorenvio.com.br'
+  const url = `${baseUrl}/api/v2/me/shipment/tracking`
+  const userAgent = `${process.env.MELHOR_ENVIO_FROM_NAME} (${process.env.MELHOR_ENVIO_FROM_EMAIL})`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'User-Agent': userAgent
+    },
+    body: JSON.stringify({ orders: shipmentIds })
+  })
+  const text = await res.text()
+  let data
+  try { data = JSON.parse(text) } catch (e) { data = text }
+  if (!res.ok) {
+    const err = new Error('getTrackingBatch failed')
     err.status = res.status
     err.body = data
     throw err
