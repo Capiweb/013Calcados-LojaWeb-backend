@@ -74,16 +74,7 @@ export const createOrderFromCart = async (userId, endereco, melhorenvio_service_
         console.log(`createOrderFromCart: pedido ${existingPending.id} já não está mais PENDENTE (status=${fresh?.status}). Não será reusado; criando novo pedido.`)
       } else {
         console.log(`createOrderFromCart: reusando pedido PENDENTE existente ${existingPending.id} para o usuário ${userId}`)
-        // ensure items reflect current cart: remove old items and recreate from cart to keep totals in sync
-        // For simplicity we'll delete existing items and recreate
-        try {
-          await Promise.all((existingPending.itens || []).map(it => orderRepo.pedidoItem && orderRepo.pedidoItem))
-        } catch (e) {
-          // ignore; not critical
-        }
-        // Recalculate total and update items
-        // O desconto do cupom é aplicado por item (igual ao que é enviado ao Mercado Pago),
-        // garantindo que PedidoItem.preco e Pedido.total sejam sempre consistentes.
+        // Recalculate total from current cart items applying coupon discount per item
         let total = 0
         const itensData = cart.itens.map((item) => {
           const precoPleno = Number(getEffectivePrice(item.produtoVariacao.produto))
@@ -97,26 +88,27 @@ export const createOrderFromCart = async (userId, endereco, melhorenvio_service_
             preco: preco,
           }
         })
-        // remove existing items
-        try { await orderRepo.deleteOrderItemsByPedidoId(existingPending.id) } catch (e) { /* noop */ }
-        for (const it of itensData) {
-          await orderRepo.createOrderItem({ pedidoId: existingPending.id, produtoVariacaoId: it.produtoVariacaoId, quantidade: it.quantidade, preco: it.preco })
-        }
-        // update total and shipping if needed
-        try { await orderRepo.updateOrderStatus(existingPending.id, existingPending.status) } catch (e) { /* noop */ }
-        // persist cupomCodigo (or clear it if none was applied)
-        try { await orderRepo.updateOrderCupom(existingPending.id, cupomCodigo || null) } catch (e) { console.warn('createOrderFromCart: falha ao atualizar cupomCodigo do pedido pendente', e?.message || e) }
-        // include frete when updating total
+
+        // 1) Atualiza total e cupom PRIMEIRO — antes de qualquer operação que possa lançar exceção.
+        //    Isso garante que o valor com desconto seja sempre persistido, independente do que
+        //    aconteça com a recriação dos itens.
         try {
           await orderRepo.updateOrderTotal(existingPending.id, Number((total + freteValue).toFixed(2)))
+          console.log(`createOrderFromCart: total do pedido ${existingPending.id} atualizado para ${(total + freteValue).toFixed(2)} (cupomDesconto=${cupomDesconto})`)
         } catch (e) {
-          console.warn('createOrderFromCart: falha ao atualizar total com frete para pedido pendente', e?.message || e)
+          console.warn('createOrderFromCart: falha ao atualizar total do pedido pendente', e?.message || e)
         }
+        try { await orderRepo.updateOrderCupom(existingPending.id, cupomCodigo || null) } catch (e) { console.warn('createOrderFromCart: falha ao atualizar cupomCodigo do pedido pendente', e?.message || e) }
+        try { await orderRepo.updateOrderShipping(existingPending.id, { melhorenvio_service_id }) } catch (e) { console.warn('createOrderFromCart: falha ao atualizar melhorenvio_service_id do pedido pendente', e?.message || e) }
 
+        // 2) Recria os itens do pedido com os preços com desconto (best-effort)
+        try { await orderRepo.deleteOrderItemsByPedidoId(existingPending.id) } catch (e) { console.warn('createOrderFromCart: falha ao deletar itens do pedido pendente', e?.message || e) }
         try {
-          await orderRepo.updateOrderShipping(existingPending.id, melhorenvio_service_id)
+          for (const it of itensData) {
+            await orderRepo.createOrderItem({ pedidoId: existingPending.id, produtoVariacaoId: it.produtoVariacaoId, quantidade: it.quantidade, preco: it.preco })
+          }
         } catch (e) {
-          console.warn('createOrderFromCart: falha ao atualizar frete para pedido pendente', e?.message || e)
+          console.warn('createOrderFromCart: falha ao recriar itens do pedido pendente', e?.message || e)
         }
 
         const full = await orderRepo.getOrderById(existingPending.id)
