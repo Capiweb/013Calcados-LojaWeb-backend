@@ -114,8 +114,10 @@ router.delete('/cart/items/:id', authMiddleware, orderController.removeItem)
  */
 router.post('/checkout', authMiddleware, validate(CheckoutSchema), orderController.checkout)
 
-// Salva o cupom validado no pedido pendente do usuário (chamado ao clicar em "Aplicar Cupom")
+// Salva ou limpa o cupom no pedido pendente (cupomCodigo: "" → limpa, "PROMO10" → salva)
 router.patch('/pending/coupon', authMiddleware, orderController.saveCouponToPendingOrder)
+// Retorna o pedido pendente do usuário (com cupomCodigo) para o frontend sincronizar estado
+router.get('/pending', authMiddleware, orderController.getPendingOrder)
 
 
 /**

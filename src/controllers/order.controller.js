@@ -103,21 +103,34 @@ export const checkout = async (req, res) => {
     const melhorenvio_service_id = req.body?.melhorenvio_service_id == null ? undefined : Number(req.body.melhorenvio_service_id)
 
     // --- Cupom de desconto ---
-    let cupomCodigo = req.body?.cupomCodigo ? String(req.body.cupomCodigo).trim().toUpperCase() : null
+    // req.body.cupomCodigo pode ser:
+    //   undefined  → frontend não enviou (ex: estado React perdido) → tenta DB fallback
+    //   ""         → frontend enviou explicitamente vazio (usuário não tem cupom) → sem desconto, limpa DB
+    //   "PROMO10"  → cupom aplicado → valida e aplica
+    const rawCupom = req.body?.cupomCodigo
+    let cupomCodigo = rawCupom !== undefined ? String(rawCupom).trim().toUpperCase() || null : undefined
     let cupomDesconto = 0 // percentual, ex: 0.10
     let cupomValido = null
 
-    // Se nenhum cupom foi enviado pelo frontend (ex: estado React resetou entre sessões),
-    // tenta recuperar o cupom já armazenado no pedido pendente existente do usuário.
-    if (!cupomCodigo) {
+    if (cupomCodigo === null) {
+      // Usuário enviou explicitamente vazio → sem cupom. Limpa o cupom do pedido pendente se existir.
+      console.log('checkout: cupomCodigo enviado como vazio — removendo cupom do pedido pendente')
+      try {
+        const pedidoPendente = await orderService.getPendingOrderForUser(userId)
+        if (pedidoPendente?.cupomCodigo) await orderService.updatePendingOrderCoupon(userId, null)
+      } catch (e) { /* não crítico */ }
+    } else if (cupomCodigo === undefined) {
+      // Não enviado → DB fallback (estado React pode ter sido perdido em reload)
       try {
         const pedidoPendente = await orderService.getPendingOrderForUser(userId)
         if (pedidoPendente?.cupomCodigo) {
           cupomCodigo = pedidoPendente.cupomCodigo
           console.log(`checkout: cupomCodigo recuperado do pedido pendente: ${cupomCodigo}`)
+        } else {
+          cupomCodigo = null
         }
       } catch (e) {
-        // não crítico — continua sem cupom
+        cupomCodigo = null
       }
     }
 
@@ -408,8 +421,18 @@ export const deleteAllPaymentsForUser = async (req, res) => {
 export const saveCouponToPendingOrder = async (req, res) => {
   try {
     const userId = req.userId
-    const cupomCodigo = req.body?.cupomCodigo ? String(req.body.cupomCodigo).trim().toUpperCase() : null
-    if (!cupomCodigo) return res.status(400).json({ error: 'cupomCodigo é obrigatório' })
+    const rawCupom = req.body?.cupomCodigo
+    const cupomCodigo = rawCupom !== undefined ? String(rawCupom).trim().toUpperCase() || null : null
+
+    // cupomCodigo === null → limpar cupom do pedido pendente
+    if (!cupomCodigo) {
+      const pedidoPendente = await orderService.getPendingOrderForUser(userId)
+      if (pedidoPendente?.cupomCodigo) {
+        await orderService.updatePendingOrderCoupon(userId, null)
+        console.log(`saveCouponToPendingOrder: cupom removido do pedido pendente ${pedidoPendente.id}`)
+      }
+      return res.status(200).json({ ok: true, cleared: true })
+    }
 
     // Validar cupom
     const resultado = await cupomService.validarCupom(cupomCodigo, userId)
@@ -423,7 +446,6 @@ export const saveCouponToPendingOrder = async (req, res) => {
       await orderService.updatePendingOrderCoupon(userId, cupomCodigo)
       console.log(`saveCouponToPendingOrder: cupomCodigo=${cupomCodigo} salvo no pedido pendente ${pedidoPendente.id}`)
     } else {
-      // Nenhum pedido pendente ainda — o cupom será aplicado na hora do checkout via req.body
       console.log(`saveCouponToPendingOrder: cupomCodigo=${cupomCodigo} validado (nenhum pedido pendente para salvar ainda)`)
     }
 
@@ -435,6 +457,22 @@ export const saveCouponToPendingOrder = async (req, res) => {
   } catch (error) {
     console.error('saveCouponToPendingOrder error:', error)
     return res.status(500).json({ error: 'Erro ao salvar cupom' })
+  }
+}
+
+/**
+ * GET /api/orders/pending
+ * Retorna o pedido PENDENTE do usuário (com cupomCodigo) para o frontend sincronizar estado.
+ */
+export const getPendingOrder = async (req, res) => {
+  try {
+    const userId = req.userId
+    const pedido = await orderService.getPendingOrderForUser(userId)
+    if (!pedido) return res.status(200).json(null)
+    return res.status(200).json({ id: pedido.id, cupomCodigo: pedido.cupomCodigo ?? null })
+  } catch (error) {
+    console.error('getPendingOrder error:', error)
+    return res.status(500).json({ error: 'Erro ao buscar pedido pendente' })
   }
 }
 
