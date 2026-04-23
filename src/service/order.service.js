@@ -49,6 +49,12 @@ export const getPendingOrderForUser = async (userId) => {
   return orderRepo.findPendingOrderByUserId(userId)
 }
 
+export const updatePendingOrderCoupon = async (userId, cupomCodigo) => {
+  const pending = await orderRepo.findPendingOrderByUserId(userId)
+  if (!pending) return null
+  return orderRepo.updateOrderCupom(pending.id, cupomCodigo || null)
+}
+
 export const createOrderFromCart = async (userId, endereco, melhorenvio_service_id, cupomDesconto = 0, cupomCodigo = null) => {
   // Garantir que cupomDesconto é sempre um número JS simples (evita problemas com Prisma Decimal)
   cupomDesconto = Number(cupomDesconto) || 0

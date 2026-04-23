@@ -399,6 +399,45 @@ export const deleteAllPaymentsForUser = async (req, res) => {
   }
 }
 
+/**
+ * PATCH /api/orders/pending/coupon
+ * Valida e salva o cupom no pedido PENDENTE do usuário.
+ * Chamado pelo frontend quando o usuário clica em "Aplicar Cupom",
+ * garantindo que o cupomCodigo seja persistido no banco ANTES do checkout.
+ */
+export const saveCouponToPendingOrder = async (req, res) => {
+  try {
+    const userId = req.userId
+    const cupomCodigo = req.body?.cupomCodigo ? String(req.body.cupomCodigo).trim().toUpperCase() : null
+    if (!cupomCodigo) return res.status(400).json({ error: 'cupomCodigo é obrigatório' })
+
+    // Validar cupom
+    const resultado = await cupomService.validarCupom(cupomCodigo, userId)
+    if (!resultado.valido) {
+      return res.status(400).json({ error: resultado.mensagem || 'Cupom inválido' })
+    }
+
+    // Salvar no pedido pendente (se existir)
+    const pedidoPendente = await orderService.getPendingOrderForUser(userId)
+    if (pedidoPendente) {
+      await orderService.updatePendingOrderCoupon(userId, cupomCodigo)
+      console.log(`saveCouponToPendingOrder: cupomCodigo=${cupomCodigo} salvo no pedido pendente ${pedidoPendente.id}`)
+    } else {
+      // Nenhum pedido pendente ainda — o cupom será aplicado na hora do checkout via req.body
+      console.log(`saveCouponToPendingOrder: cupomCodigo=${cupomCodigo} validado (nenhum pedido pendente para salvar ainda)`)
+    }
+
+    return res.status(200).json({
+      ok: true,
+      cupom: resultado.cupom,
+      desconto: Number(resultado.cupom.desconto),
+    })
+  } catch (error) {
+    console.error('saveCouponToPendingOrder error:', error)
+    return res.status(500).json({ error: 'Erro ao salvar cupom' })
+  }
+}
+
 export const addFreight = async (req, res) => {
   try {
     const { id } = req.params
