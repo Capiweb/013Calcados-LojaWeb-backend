@@ -16,6 +16,7 @@ import favoriteRoutes from './src/routes/favorite.routes.js'
 import enderecoRoutes from './src/routes/endereco.routes.js'
 import variacaoRoutes from './src/routes/variacao.routes.js'
 import shippingRoutes from './src/routes/shipping.routes.js'
+import cupomRoutes from './src/routes/cupom.routes.js'
 import * as orderService from './src/service/order.service.js'
 import { initIo } from './src/utils/io.js'
 import http from 'http'
@@ -133,6 +134,9 @@ app.use('/api/variacoes', variacaoRoutes)
 
 // Rotas de frete / Melhor Envio
 app.use('/api/shipping', shippingRoutes)
+
+// Rotas de cupons de desconto
+app.use('/api/cupons', cupomRoutes)
 
 // Webhooks
 app.use('/webhooks', webhookRoutes)

@@ -3,6 +3,7 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import * as userRepository from '../repositories/user.repository.js';
+import { gerarCupomPrimeiraCompra } from './cupom.service.js'
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
@@ -27,6 +28,11 @@ export const registerUser = async (nome, email, senha, documento, telefone) => {
     documento,
     telefone,
   });
+
+  // Gerar cupom de primeira compra automaticamente
+  gerarCupomPrimeiraCompra(newUser.id).catch((err) => {
+    console.error('Falha ao gerar cupom de primeira compra:', err)
+  })
 
   // Retornar dados sem informações sensíveis
   return {

@@ -1,6 +1,7 @@
 import * as feedbackRepo from '../repositories/feedback.repository.js'
 import * as productRepo from '../repositories/product.repository.js'
 import { PrismaClient } from '@prisma/client'
+import { gerarCupomAvaliacao } from './cupom.service.js'
 
 const prisma = new PrismaClient()
 
@@ -102,6 +103,11 @@ export const createFeedback = async (usuarioId, payload) => {
     })
 
     return feedback
+  })
+
+  // Gerar cupom de avaliação como recompensa (não bloqueante)
+  gerarCupomAvaliacao(usuarioId).catch((err) => {
+    console.error('Falha ao gerar cupom de avaliação:', err)
   })
 
   return result

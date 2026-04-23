@@ -5,6 +5,7 @@ import * as productRepo from '../repositories/product.repository.js'
 import { getIo } from '../utils/io.js'
 import * as shippingService from './shipping.service.js'
 import { findUserById } from '../repositories/user.repository.js'
+import * as cupomService from './cupom.service.js'
 
 const MP_ACCESS_TOKEN = process.env.MP_ACCESS_TOKEN
 const MP_BASE = 'https://api.mercadopago.com'
@@ -44,7 +45,7 @@ export const removeItemFromCart = async (itemId) => {
 }
 
 //endereco.cep
-export const createOrderFromCart = async (userId, endereco, melhorenvio_service_id) => {
+export const createOrderFromCart = async (userId, endereco, melhorenvio_service_id, cupomDesconto = 0, cupomCodigo = null) => {
   const cart = await cartRepo.getCartWithItems(userId)
 
   if (!cart || !cart.itens || cart.itens.length === 0) throw new Error('Carrinho vazio')
@@ -81,9 +82,14 @@ export const createOrderFromCart = async (userId, endereco, melhorenvio_service_
           // ignore; not critical
         }
         // Recalculate total and update items
+        // O desconto do cupom é aplicado por item (igual ao que é enviado ao Mercado Pago),
+        // garantindo que PedidoItem.preco e Pedido.total sejam sempre consistentes.
         let total = 0
         const itensData = cart.itens.map((item) => {
-          const preco = Number(getEffectivePrice(item.produtoVariacao.produto))
+          const precoPleno = Number(getEffectivePrice(item.produtoVariacao.produto))
+          const preco = cupomDesconto > 0
+            ? Number(Math.max(0.01, precoPleno * (1 - cupomDesconto)).toFixed(2))
+            : precoPleno
           total += preco * item.quantidade
           return {
             produtoVariacaoId: item.produtoVariacaoId,
@@ -98,6 +104,8 @@ export const createOrderFromCart = async (userId, endereco, melhorenvio_service_
         }
         // update total and shipping if needed
         try { await orderRepo.updateOrderStatus(existingPending.id, existingPending.status) } catch (e) { /* noop */ }
+        // persist cupomCodigo (or clear it if none was applied)
+        try { await orderRepo.updateOrderCupom(existingPending.id, cupomCodigo || null) } catch (e) { console.warn('createOrderFromCart: falha ao atualizar cupomCodigo do pedido pendente', e?.message || e) }
         // include frete when updating total
         try {
           await orderRepo.updateOrderTotal(existingPending.id, Number((total + freteValue).toFixed(2)))
@@ -122,9 +130,14 @@ export const createOrderFromCart = async (userId, endereco, melhorenvio_service_
   }
 
   // calcular total (subtotal dos items)
+  // O desconto do cupom é aplicado por item (igual ao que é enviado ao Mercado Pago),
+  // garantindo que PedidoItem.preco e Pedido.total sejam sempre consistentes.
   let total = 0
   const itensData = cart.itens.map((item) => {
-    const preco = Number(getEffectivePrice(item.produtoVariacao.produto))
+    const precoPleno = Number(getEffectivePrice(item.produtoVariacao.produto))
+    const preco = cupomDesconto > 0
+      ? Number(Math.max(0.01, precoPleno * (1 - cupomDesconto)).toFixed(2))
+      : precoPleno
     total += preco * item.quantidade
     return {
       produtoVariacaoId: item.produtoVariacaoId,
@@ -149,7 +162,8 @@ export const createOrderFromCart = async (userId, endereco, melhorenvio_service_
     cidade: endereco.cidade,
     estado: endereco.estado,
     cep: endereco.cep,
-    melhorenvio_service_id
+    melhorenvio_service_id,
+    cupomCodigo: cupomCodigo || null,
   })
 
   // criar itens do pedido
@@ -621,8 +635,33 @@ export const handleMpNotification = async (body) => {
         return { ok: false, reason: res.reason }
       }
 
+      // Sincroniza o total do pedido com o valor real cobrado pelo Mercado Pago.
+      // Isso garante que qualquer desconto de cupom aplicado por item (com arredondamento
+      // individual) seja refletido corretamente no banco de dados.
+      const mpTransactionAmount = paymentData.transaction_amount
+      if (mpTransactionAmount != null && Number(mpTransactionAmount) > 0) {
+        try {
+          await orderRepo.updateOrderTotal(pedido.id, Number(Number(mpTransactionAmount).toFixed(2)))
+          console.log(`processPaymentById: total do pedido ${pedido.id} atualizado para ${mpTransactionAmount} (transaction_amount do MP)`)
+        } catch (e) {
+          console.warn('processPaymentById: falha ao atualizar total do pedido com transaction_amount do MP', e?.message || e)
+        }
+      }
+
       await orderRepo.updateOrderStatus(pedido.id, 'PAGO')
       await cartRepo.clearCart(pedido.usuarioId)
+
+      // Marcar o cupom como usado agora que o pagamento foi confirmado.
+      // O cupomCodigo é armazenado no pedido para que o webhook saiba qual cupom usar.
+      if (pedido.cupomCodigo) {
+        try {
+          await cupomService.marcarComoUsado(pedido.cupomCodigo, pedido.usuarioId)
+          console.log(`processPaymentById: cupom ${pedido.cupomCodigo} marcado como usado para pedido ${pedido.id}`)
+        } catch (e) {
+          console.warn('processPaymentById: falha ao marcar cupom como usado', e?.message || e)
+        }
+      }
+
       // purchaseShipment is handled manually — label purchase removed from automatic flow
     }
 

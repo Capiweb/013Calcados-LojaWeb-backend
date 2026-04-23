@@ -4,6 +4,7 @@ import { EnderecoSchema } from '../validators/order.validator.js'
 import * as userService from '../service/user.js'
 import fetch from 'node-fetch'
 import shippingService from '../service/shipping.service.js'
+import * as cupomService from '../service/cupom.service.js'
 
 export const getCart = async (req, res) => {
   try {
@@ -101,13 +102,42 @@ export const checkout = async (req, res) => {
 
     const melhorenvio_service_id = req.body?.melhorenvio_service_id == null ? undefined : Number(req.body.melhorenvio_service_id)
 
+    // --- Cupom de desconto ---
+    const cupomCodigo = req.body?.cupomCodigo ? String(req.body.cupomCodigo).trim().toUpperCase() : null
+    let cupomDesconto = 0 // percentual, ex: 0.10
+    let cupomValido = null
+
+    if (cupomCodigo) {
+      const resultado = await cupomService.validarCupom(cupomCodigo, userId)
+      if (!resultado.valido) {
+        return res.status(400).json({ error: resultado.mensagem || 'Cupom inválido' })
+      }
+      cupomValido = resultado.cupom
+      cupomDesconto = resultado.cupom.desconto || 0
+    }
+
+    // Log de diagnóstico: confirmar recebimento do cupom e valor do desconto
+    console.log(`checkout: cupomCodigo=${cupomCodigo ?? 'nenhum'} cupomDesconto=${cupomDesconto}`)
+
+    // Aplicar desconto do cupom nas unit_prices dos items (apenas produtos, não frete)
+    const itemsComDesconto = items.map((item) => ({
+      ...item,
+      unit_price: cupomDesconto > 0
+        ? Number(Math.max(0.01, item.unit_price * (1 - cupomDesconto)).toFixed(2))
+        : item.unit_price,
+    }))
+
     let pedido
     try {
-      pedido = await orderService.createOrderFromCart(userId, endereco || {}, melhorenvio_service_id)
+      pedido = await orderService.createOrderFromCart(userId, endereco || {}, melhorenvio_service_id, cupomDesconto, cupomCodigo)
     } catch (e) {
       console.error('Erro ao criar pedido:', e)
       return res.status(500).json({ error: 'Erro ao criar pedido' })
     }
+
+    // NOTA: marcarComoUsado foi movido para o webhook (quando pagamento APROVADO).
+    // Isso evita que o cupom seja marcado como usado antes do pagamento ser confirmado,
+    // permitindo que o usuário retente o checkout com o mesmo cupom se abandonar o MP.
 
     // create pagamento record with status PENDENTE linked to pedido
     let placeholderPagamentoId
@@ -121,7 +151,7 @@ export const checkout = async (req, res) => {
 
     // If pedido contains frete, add a separate item representing shipping so Mercado Pago shows total correctly
     const mpBody = {
-      items: [...items],
+      items: [...itemsComDesconto],
       external_reference: pedido.id || cart.id || undefined,
       back_urls: {
         success: process.env.MP_BACK_URL_SUCCESS || 'https://seusite.com/success',

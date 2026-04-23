@@ -202,6 +202,10 @@ export const updateOrderTotal = async (pedidoId, total) => {
   return prisma.pedido.update({ where: { id: pedidoId }, data: { total } })
 }
 
+export const updateOrderCupom = async (pedidoId, cupomCodigo) => {
+  return prisma.pedido.update({ where: { id: pedidoId }, data: { cupomCodigo: cupomCodigo ?? null } })
+}
+
 export const deletePaymentByPagamentoId = async (pagamentoId) => {
   return prisma.pagamento.deleteMany({ where: { pagamentoId } })
 }
