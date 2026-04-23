@@ -104,7 +104,7 @@ export const checkout = async (req, res) => {
 
     // --- Cupom de desconto ---
     let cupomCodigo = req.body?.cupomCodigo ? String(req.body.cupomCodigo).trim().toUpperCase() : null
-    let cupomDesconto = 5 // percentual, ex: 0.10
+    let cupomDesconto = 0 // percentual, ex: 0.10
     let cupomValido = null
 
     // Se nenhum cupom foi enviado pelo frontend (ex: estado React resetou entre sessões),
