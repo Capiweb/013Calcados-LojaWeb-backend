@@ -45,7 +45,14 @@ export const removeItemFromCart = async (itemId) => {
 }
 
 //endereco.cep
+export const getPendingOrderForUser = async (userId) => {
+  return orderRepo.findPendingOrderByUserId(userId)
+}
+
 export const createOrderFromCart = async (userId, endereco, melhorenvio_service_id, cupomDesconto = 0, cupomCodigo = null) => {
+  // Garantir que cupomDesconto é sempre um número JS simples (evita problemas com Prisma Decimal)
+  cupomDesconto = Number(cupomDesconto) || 0
+
   const cart = await cartRepo.getCartWithItems(userId)
 
   if (!cart || !cart.itens || cart.itens.length === 0) throw new Error('Carrinho vazio')

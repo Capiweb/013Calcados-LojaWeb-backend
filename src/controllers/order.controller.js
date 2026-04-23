@@ -103,17 +103,37 @@ export const checkout = async (req, res) => {
     const melhorenvio_service_id = req.body?.melhorenvio_service_id == null ? undefined : Number(req.body.melhorenvio_service_id)
 
     // --- Cupom de desconto ---
-    const cupomCodigo = req.body?.cupomCodigo ? String(req.body.cupomCodigo).trim().toUpperCase() : null
+    let cupomCodigo = req.body?.cupomCodigo ? String(req.body.cupomCodigo).trim().toUpperCase() : null
     let cupomDesconto = 0 // percentual, ex: 0.10
     let cupomValido = null
+
+    // Se nenhum cupom foi enviado pelo frontend (ex: estado React resetou entre sessões),
+    // tenta recuperar o cupom já armazenado no pedido pendente existente do usuário.
+    if (!cupomCodigo) {
+      try {
+        const pedidoPendente = await orderService.getPendingOrderForUser(userId)
+        if (pedidoPendente?.cupomCodigo) {
+          cupomCodigo = pedidoPendente.cupomCodigo
+          console.log(`checkout: cupomCodigo recuperado do pedido pendente: ${cupomCodigo}`)
+        }
+      } catch (e) {
+        // não crítico — continua sem cupom
+      }
+    }
 
     if (cupomCodigo) {
       const resultado = await cupomService.validarCupom(cupomCodigo, userId)
       if (!resultado.valido) {
-        return res.status(400).json({ error: resultado.mensagem || 'Cupom inválido' })
+        // Se o cupom armazenado expirou/foi usado, ignora silenciosamente
+        // (o pedido seguirá sem desconto). Mas se foi enviado explicitamente, retorna erro.
+        if (req.body?.cupomCodigo) {
+          return res.status(400).json({ error: resultado.mensagem || 'Cupom inválido' })
+        }
+        cupomCodigo = null
+      } else {
+        cupomValido = resultado.cupom
+        cupomDesconto = Number(resultado.cupom.desconto) || 0
       }
-      cupomValido = resultado.cupom
-      cupomDesconto = resultado.cupom.desconto || 0
     }
 
     // Log de diagnóstico: confirmar recebimento do cupom e valor do desconto
