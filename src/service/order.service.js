@@ -928,15 +928,15 @@ export const startShipmentPurchaseJob = async (pedidoId, attempt = 0) => {
     if (!pedido) throw new Error('Pedido não encontrado')
 
     if (!pedido.melhorenvio_shipment_id) {
+      // Use fixed insurance value (default R$80) unless overridden by env
+      const FIXED_INSURANCE = Number(process.env.MELHOR_ENVIO_INSURANCE_VALUE) || 80
       const products = (pedido.itens || []).map(it => {
         const unitValue = Number(it.preco || 0)
-        // Melhor Envio requires insurance_value >= R$1.00 and equal to invoice if invoice exists
-        const insuranceValue = Math.max(1, Math.round(unitValue * 100) / 100)
         return {
           name: it.nome || 'Tênis',
           quantity: it.quantidade,
           unitary_value: unitValue,
-          insurance_value: insuranceValue,
+          insurance_value: FIXED_INSURANCE,
           weight: 1,
           length: 20,
           height: 10,

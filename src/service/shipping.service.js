@@ -59,16 +59,15 @@ export const calculateShipping = async (userId, postalCode) => {
       return Number(produto.preco || 0)
     }
 
+    // Use fixed insurance value (default R$80) unless overridden by env
+    const FIXED_INSURANCE = Number(process.env.MELHOR_ENVIO_INSURANCE_VALUE) || 80
     const products = items.flatMap(item => {
-      // insurance_value needs to be set. using effective price as insurance value.
-      const price = Number(getEffectivePriceLocal(item.produtoVariacao?.produto) ?? 0)
-
       return Array.from({ length: item.quantidade }, () => ({
         weight: Number(process.env.ITEM_WEIGHT),
         length: Number(process.env.ITEM_LENGTH),
         height: Number(process.env.ITEM_HEIGHT),
         width: Number(process.env.ITEM_WIDTH),
-        insurance_value: price
+        insurance_value: FIXED_INSURANCE
       }));
     });
 
