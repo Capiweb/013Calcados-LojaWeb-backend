@@ -667,6 +667,13 @@ export const handleMpNotification = async (body) => {
         }
       }
 
+      // Start shipment creation/purchase job in background (idempotent)
+      try {
+        setImmediate(() => startShipmentPurchaseJob(pedido.id))
+      } catch (e) {
+        console.warn('failed to start shipment job', e?.message || e)
+      }
+
       // purchaseShipment is handled manually — label purchase removed from automatic flow
     }
 

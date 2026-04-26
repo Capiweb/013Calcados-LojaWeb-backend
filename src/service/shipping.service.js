@@ -4,9 +4,28 @@ const MELHOR_ENVIO_TOKEN = process.env.MELHOR_ENVIO_TOKEN
 const MELHOR_ENVIO_CALCULATE_URL =
   process.env.MELHOR_ENVIO_CALCULATE_URL || 'https://api.melhorenvio.com/v2/me/shipment/calculate'
 const MELHOR_ENVIO_OAUTH_TOKEN_URL = process.env.MELHOR_ENVIO_OAUTH_TOKEN_URL || 'https://api.melhorenvio.com/oauth/token'
-const MELHOR_ENVIO_CREATE_URL = process.env.MELHOR_ENVIO_CREATE_URL || 'https://api.melhorenvio.com/v2/me/shipments'
-const MELHOR_ENVIO_PURCHASE_URL = process.env.MELHOR_ENVIO_PURCHASE_URL || 'https://api.melhorenvio.com/v2/me/shipments/{shipment_id}/purchase'
-const MELHOR_ENVIO_GET_URL = process.env.MELHOR_ENVIO_GET_URL || 'https://api.melhorenvio.com/v2/me/shipments/{shipment_id}'
+// Normalize create URL: if someone configured the older /cart endpoint, replace with /shipments
+const _rawCreate = process.env.MELHOR_ENVIO_CREATE_URL || 'https://api.melhorenvio.com/v2/me/shipments'
+const MELHOR_ENVIO_CREATE_URL = _rawCreate.includes('/cart') ? _rawCreate.replace('/cart', '/shipments') : _rawCreate
+// Normalize purchase URL: convert /cart/checkout -> /shipments/{shipment_id}/purchase when necessary
+const _rawPurchase = process.env.MELHOR_ENVIO_PURCHASE_URL || 'https://api.melhorenvio.com/v2/me/shipments/{shipment_id}/purchase'
+let MELHOR_ENVIO_PURCHASE_URL = _rawPurchase
+if (_rawPurchase.includes('/cart/checkout')) {
+  MELHOR_ENVIO_PURCHASE_URL = _rawPurchase.replace('/cart/checkout', '/shipments/{shipment_id}/purchase')
+} else if (_rawPurchase.includes('/cart')) {
+  MELHOR_ENVIO_PURCHASE_URL = _rawPurchase.replace('/cart', '/shipments/{shipment_id}/purchase')
+}
+// Normalize GET URL: some envs use singular /shipment/{id} or /shipment/{shipment_id}; prefer /orders/{id}
+const _rawGet = process.env.MELHOR_ENVIO_GET_URL || 'https://api.melhorenvio.com/v2/me/shipments/{shipment_id}'
+let MELHOR_ENVIO_GET_URL = _rawGet
+if (_rawGet.includes('/shipment/{id}')) {
+  MELHOR_ENVIO_GET_URL = _rawGet.replace('/shipment/{id}', '/orders/{id}')
+} else if (_rawGet.includes('/shipment/{shipment_id}')) {
+  MELHOR_ENVIO_GET_URL = _rawGet.replace('/shipment/{shipment_id}', '/orders/{id}')
+} else if (_rawGet.includes('/shipments/{shipment_id}')) {
+  // prefer /orders/{id} as documented for listing label info
+  MELHOR_ENVIO_GET_URL = _rawGet.replace('/shipments/{shipment_id}', '/orders/{id}')
+}
 
 const mask = (t = '') => (t ? `${String(t).slice(0, 6)}...` : '<missing>')
 
@@ -107,7 +126,8 @@ export const calculateShipping = async (userId, postalCode) => {
 export const createShipment = async (shipmentPayload) => {
   const token = MELHOR_ENVIO_TOKEN
   if (!token) throw new Error('Nenhum token Melhor Envio disponível')
-  const url = process.env.MELHOR_ENVIO_CREATE_URL || MELHOR_ENVIO_CREATE_URL
+  // Use the normalized constant so any /cart -> /shipments rewrite is applied
+  const url = MELHOR_ENVIO_CREATE_URL
   const res = await fetch(url, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -121,6 +141,14 @@ export const createShipment = async (shipmentPayload) => {
     err.status = res.status
     err.body = data
     throw err
+  }
+  // Debug: if API didn't return an id, log full response to help diagnosis
+  if (!data || (typeof data === 'object' && !data.id && !data.shipment_id)) {
+    console.warn('createShipment: resposta inesperada da API Melhor Envio — sem id encontrado', {
+      url,
+      payloadSummary: { service: shipmentPayload.service, from: shipmentPayload.from?.postal_code, to: shipmentPayload.to?.postal_code },
+      response: data
+    })
   }
   return data
 }
@@ -147,33 +175,26 @@ export const createShipment = async (shipmentPayload) => {
 //   return data
 // }
 
-export const purchaseShipment = async () => {
+export const purchaseShipment = async (shipmentId, purchasePayload = {}) => {
   const token = MELHOR_ENVIO_TOKEN
   if (!token) throw new Error('Nenhum token Melhor Envio disponível')
-
-  const url = process.env.MELHOR_ENVIO_PURCHASE_URL
-
+  // Use the normalized purchase URL template
+  const raw = MELHOR_ENVIO_PURCHASE_URL
+  const url = raw.replace('{shipment_id}', shipmentId)
   const res = await fetch(url, {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/json'
-    }
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(purchasePayload)
   })
-
   const text = await res.text()
   let data
-  try { data = JSON.parse(text) } catch { data = text }
-
+  try { data = JSON.parse(text) } catch (e) { data = text }
   if (!res.ok) {
     const err = new Error('purchaseShipment failed')
     err.status = res.status
     err.body = data
-
-    console.error(err)
-    // throw err
+    throw err
   }
-
   return data
 }
 
@@ -187,8 +208,16 @@ export const purchaseShipment = async () => {
 export const getShipment = async (shipmentId) => {
   const token = MELHOR_ENVIO_TOKEN
   if (!token) throw new Error('Nenhum token Melhor Envio disponível')
-  const baseUrl = process.env.MELHOR_ENVIO_BASE_URL || 'https://melhorenvio.com.br'
-  const url = `${baseUrl}/api/v2/me/orders/${shipmentId}`
+
+  const raw = process.env.MELHOR_ENVIO_GET_URL || MELHOR_ENVIO_GET_URL
+  let url
+  if (raw && raw.includes('{shipment_id}')) {
+    url = raw.replace('{shipment_id}', shipmentId)
+  } else {
+    const baseUrl = process.env.MELHOR_ENVIO_BASE_URL || 'https://melhorenvio.com.br'
+    url = `${baseUrl}/api/v2/me/orders/${shipmentId}`
+  }
+
   const userAgent = `${process.env.MELHOR_ENVIO_FROM_NAME} (${process.env.MELHOR_ENVIO_FROM_EMAIL})`
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${token}`, Accept: 'application/json', 'User-Agent': userAgent }
