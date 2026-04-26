@@ -998,7 +998,9 @@ export const startShipmentPurchaseJob = async (pedidoId, attempt = 0) => {
         volumes,
       }
 
+      console.log('[JOB] criando shipment (Melhor Envio) para pedido', pedidoId, { to: shipmentPayload.to?.postal_code, service: shipmentPayload.service })
       const createRes = await shippingService.createShipment(shipmentPayload)
+      console.log('[JOB] createShipment response', { pedidoId, shipmentId: createRes?.id || createRes?.shipment_id, raw: createRes })
 
       await orderRepo.updateOrderShippingInfo(pedidoId, {
         melhorenvio_shipment_id: createRes.id,
@@ -1011,9 +1013,9 @@ export const startShipmentPurchaseJob = async (pedidoId, attempt = 0) => {
       throw new Error('Shipment ID ausente')
     }
 
-    const purchaseRes = await shippingService.purchaseShipment(
-      freshPedido.melhorenvio_shipment_id
-    )
+    console.log('[JOB] iniciando compra da etiqueta para pedido', pedidoId, { shipmentId: freshPedido.melhorenvio_shipment_id })
+    const purchaseRes = await shippingService.purchaseShipment(freshPedido.melhorenvio_shipment_id)
+    console.log('[JOB] purchaseShipment response', { pedidoId, purchaseId: purchaseRes?.id || purchaseRes?.purchase_id, raw: purchaseRes })
 
     await orderRepo.updateOrderShippingInfo(pedidoId, {
       melhorenvio_purchase_id: purchaseRes.id,
