@@ -151,3 +151,24 @@ export const deleteUser = async (id) => {
   });
 };
 
+export const updateUserResetToken = async (id, resetToken, resetTokenExpiry) => {
+  return await prisma.usuario.update({
+    where: { id },
+    data: { resetToken, resetTokenExpiry },
+  });
+};
+
+export const updateUserPassword = async (id, senha) => {
+  return await prisma.usuario.update({
+    where: { id },
+    data: { senha },
+  });
+};
+
+export const clearResetToken = async (id) => {
+  return await prisma.usuario.update({
+    where: { id },
+    data: { resetToken: null, resetTokenExpiry: null },
+  });
+};
+

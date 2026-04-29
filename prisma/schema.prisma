@@ -12,21 +12,23 @@ datasource db {
 ///  * USUÁRIO
 ///  * =======================
 model Usuario {
-  id           String       @id @default(uuid())
-  nome         String
-  email        String       @unique
-  senha        String
-  documento    String       @unique
-  telefone     String?      
-  papel        PapelUsuario @default(USUARIO)
-  criadoEm     DateTime     @default(now())
-  atualizadoEm DateTime     @updatedAt
-  carrinho     Carrinho?
-  enderecos    Endereco[]
-  favoritos    Favorito[]
-  feedbacks    Feedback[]
-  pedidos      Pedido[]
-  cupons       Cupom[]
+  id               String       @id @default(uuid())
+  nome             String
+  email            String       @unique
+  senha            String
+  documento        String       @unique
+  telefone         String?
+  papel            PapelUsuario @default(USUARIO)
+  resetToken       String?
+  resetTokenExpiry DateTime?
+  criadoEm         DateTime     @default(now())
+  atualizadoEm     DateTime     @updatedAt
+  carrinho         Carrinho?
+  enderecos        Endereco[]
+  favoritos        Favorito[]
+  feedbacks        Feedback[]
+  pedidos          Pedido[]
+  cupons           Cupom[]
 }
 
 model Favorito {

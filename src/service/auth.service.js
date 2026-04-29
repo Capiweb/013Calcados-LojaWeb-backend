@@ -2,11 +2,14 @@
 
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import * as userRepository from '../repositories/user.repository.js';
-import { gerarCupomPrimeiraCompra } from './cupom.service.js'
+import { gerarCupomPrimeiraCompra } from './cupom.service.js';
+import { sendPasswordResetCode } from './email.service.js';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
+const RESET_TOKEN_EXPIRY = 10 * 60 * 1000; // 10 minutos
 
 // Função para registrar um novo usuário
 export const registerUser = async (nome, email, senha, documento, telefone) => {
@@ -66,7 +69,7 @@ export const loginUser = async (email, senha) => {
 
   // Gerar token JWT
   const token = jwt.sign(
-    { id: user.id, email: user.email },
+    { id: user.id, email: user.email, papel: user.papel },
     JWT_SECRET,
     { expiresIn: JWT_EXPIRES_IN }
   );
@@ -98,4 +101,69 @@ export const getUserById = async (userId) => {
     telefone: user.telefone || null,
     papel: user.papel,
   };
+};
+
+export const requestPasswordReset = async (email) => {
+  const user = await userRepository.findUserByEmail(email);
+  if (!user) {
+    return { message: 'Se o email estiver cadastrado, um código foi enviado.' };
+  }
+
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  const hashedCode = await bcrypt.hash(code, 10);
+  const expiry = new Date(Date.now() + RESET_TOKEN_EXPIRY);
+
+  await userRepository.updateUserResetToken(user.id, hashedCode, expiry);
+
+  try {
+    await sendPasswordResetCode(email, code);
+  } catch (err) {
+    console.error('❌ Erro ao enviar email:', err.message);
+    console.log(`🔑 [FALLBACK] Código para ${email}: ${code}`);
+  }
+
+  return { message: 'Se o email estiver cadastrado, um código foi enviado.' };
+};
+
+export const verifyResetCode = async (email, code) => {
+  const user = await userRepository.findUserByEmail(email);
+  if (!user || !user.resetToken || !user.resetTokenExpiry) {
+    throw new Error('Código inválido ou expirado');
+  }
+
+  if (new Date() > new Date(user.resetTokenExpiry)) {
+    throw new Error('Código expirado');
+  }
+
+  const isValid = await bcrypt.compare(code, user.resetToken);
+  if (!isValid) {
+    throw new Error('Código inválido');
+  }
+
+  const resetToken = jwt.sign(
+    { id: user.id, email: user.email, type: 'password_reset' },
+    JWT_SECRET,
+    { expiresIn: '15m' }
+  );
+
+  return { resetToken };
+};
+
+export const resetPassword = async (resetToken, newPassword) => {
+  let decoded;
+  try {
+    decoded = jwt.verify(resetToken, JWT_SECRET);
+  } catch {
+    throw new Error('Token inválido ou expirado');
+  }
+
+  if (decoded.type !== 'password_reset') {
+    throw new Error('Token inválido');
+  }
+
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
+  await userRepository.updateUserPassword(decoded.id, hashedPassword);
+  await userRepository.clearResetToken(decoded.id);
+
+  return { message: 'Senha atualizada com sucesso' };
 };

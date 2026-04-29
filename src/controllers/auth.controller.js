@@ -201,3 +201,65 @@ export const isAdmin = async (req, res) => {
   }
 };
 
+export const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email || !isValidEmail(email)) {
+      return res.status(400).json({ error: 'Email inválido' });
+    }
+
+    const result = await authService.requestPasswordReset(email);
+    return res.status(200).json(result);
+  } catch (error) {
+    logError('auth.forgotPassword', error);
+    return res.status(500).json({ error: 'Erro ao solicitar recuperação de senha' });
+  }
+};
+
+export const verifyCode = async (req, res) => {
+  try {
+    const { email, code } = req.body;
+
+    if (!email || !code) {
+      return res.status(400).json({ error: 'Email e código são obrigatórios' });
+    }
+
+    const result = await authService.verifyResetCode(email, code);
+    return res.status(200).json(result);
+  } catch (error) {
+    logError('auth.verifyCode', error);
+    if (error.message === 'Código inválido ou expirado' || error.message === 'Código expirado' || error.message === 'Código inválido') {
+      return res.status(400).json({ error: error.message });
+    }
+    return res.status(500).json({ error: 'Erro ao verificar código' });
+  }
+};
+
+export const resetPassword = async (req, res) => {
+  try {
+    const { token, newPassword, confirmPassword } = req.body;
+
+    if (!token || !newPassword || !confirmPassword) {
+      return res.status(400).json({ error: 'Token e nova senha são obrigatórios' });
+    }
+
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ error: 'As senhas não coincidem' });
+    }
+
+    if (!isValidPassword(newPassword)) {
+      return res.status(400).json({ error: 'A senha deve ter no mínimo 6 caracteres' });
+    }
+
+    const result = await authService.resetPassword(token, newPassword);
+    return res.status(200).json(result);
+  } catch (error) {
+    logError('auth.resetPassword', error);
+    if (error.message === 'Token inválido ou expirado' || error.message === 'Token inválido') {
+      return res.status(400).json({ error: error.message });
+    }
+    return res.status(500).json({ error: 'Erro ao redefinir senha' });
+  }
+};
+

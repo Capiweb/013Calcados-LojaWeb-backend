@@ -16,6 +16,7 @@ export function authMiddleware(req, res, next) {
     req.userId = decoded.id;
     req.user = {
       id: decoded.id,
+      isAdmin: decoded.papel === 'ADMIN',
     };
 
     next();

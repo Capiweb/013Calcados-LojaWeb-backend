@@ -187,7 +187,7 @@
 // Rotas de Autenticação
 
 import { Router } from 'express';
-import { register, login, check, isAdmin } from '../controllers/auth.controller.js';
+import { register, login, check, isAdmin, forgotPassword, verifyCode, resetPassword } from '../controllers/auth.controller.js';
 import { authMiddleware } from '../middleware/authMiddleware.js';
 import { validate } from '../middleware/validateMiddleware.js';
 import { RegisterSchema, LoginSchema } from '../validators/auth.validator.js';
@@ -201,6 +201,12 @@ router.post('/login', validate(LoginSchema), login);
 router.get('/check', authMiddleware, check);
 
 router.get('/isAdmin', authMiddleware, isAdmin);
+
+router.post('/forgot-password', forgotPassword);
+
+router.post('/verify-code', verifyCode);
+
+router.post('/reset-password', resetPassword);
 
 export default router;
 
