@@ -920,23 +920,40 @@ export const deletePendingOrdersOlderThan = async (hours = 24) => {
   return orderRepo.deletePendingOrdersOlderThan(cutoff.toISOString())
 }
 
+// Concurrency lock to prevent duplicate job executions for the same pedido
+const _shipmentJobLocks = new Map()
+
 export const startShipmentPurchaseJob = async (pedidoId, attempt = 0) => {
   const MAX_ATTEMPTS = 3
 
+  // Prevent concurrent executions for the same pedido
+  if (_shipmentJobLocks.has(pedidoId)) {
+    console.log('[JOB] execução já em andamento para pedido', pedidoId, '- ignorando')
+    return
+  }
+
   try {
+    _shipmentJobLocks.set(pedidoId, true)
+
     const pedido = await orderRepo.getOrderById(pedidoId)
     if (!pedido) throw new Error('Pedido não encontrado')
 
+    // Validate items exist and have data
+    if (!pedido.itens || pedido.itens.length === 0) {
+      throw new Error('Pedido sem itens - não é possível criar shipment')
+    }
+
     if (!pedido.melhorenvio_shipment_id) {
-      // Use fixed insurance value (default R$80) unless overridden by env
-      const FIXED_INSURANCE = Number(process.env.MELHOR_ENVIO_INSURANCE_VALUE) || 80
       const products = (pedido.itens || []).map(it => {
         const unitValue = Number(it.preco || 0)
+        // Melhor Envio exige que insurance_value seja igual ao unitary_value
+        // e deve ser >= 1.00
+        const insuranceValue = Math.max(1, unitValue)
         return {
           name: it.nome || 'Tênis',
           quantity: it.quantidade,
           unitary_value: unitValue,
-          insurance_value: FIXED_INSURANCE,
+          insurance_value: insuranceValue,
           weight: 1,
           length: 20,
           height: 10,
@@ -946,7 +963,6 @@ export const startShipmentPurchaseJob = async (pedidoId, attempt = 0) => {
         }
       })
 
-      //! Sem fallback, se não estiver no .env, vai dar erro
       const ITEM_WEIGHT = Number(process.env.ITEM_WEIGHT);
       const ITEM_LENGTH = Number(process.env.ITEM_LENGTH);
       const ITEM_HEIGHT = Number(process.env.ITEM_HEIGHT);
@@ -959,15 +975,8 @@ export const startShipmentPurchaseJob = async (pedidoId, attempt = 0) => {
         width: ITEM_WIDTH,
       }));
 
-      /** 
-       * ATENÇÃO:
-       * service DEVE vir do cálculo de frete.
-       * Aqui estou fixando PAC (1) apenas para não quebrar.
-       */
-      //! Checar se a plataforma irá usar apenas PAC como forma de frete
       const user = await findUserById(pedido.usuarioId);
 
-      // sanitize document (CPF/CNPJ) from user record
       const rawDocument = user.documento || ''
       const sanitizedDocument = String(rawDocument).replace(/\D/g, '')
       if (!sanitizedDocument) {
@@ -1032,10 +1041,14 @@ export const startShipmentPurchaseJob = async (pedidoId, attempt = 0) => {
     })
 
   } catch (err) {
+    console.error('[JOB] erro no shipment job', { pedidoId, attempt, message: err?.message, stack: err?.stack })
+
     if (attempt < MAX_ATTEMPTS) {
+      const backoff = Math.pow(2, attempt) * 1000
+      console.log('[JOB] retry agendado', { backoff })
       setTimeout(
         () => startShipmentPurchaseJob(pedidoId, attempt + 1),
-        Math.pow(2, attempt) * 1000
+        backoff
       )
       return
     }
@@ -1046,6 +1059,8 @@ export const startShipmentPurchaseJob = async (pedidoId, attempt = 0) => {
     })
 
     throw err
+  } finally {
+    _shipmentJobLocks.delete(pedidoId)
   }
 }
 
