@@ -1058,7 +1058,7 @@ export const startShipmentPurchaseJob = async (pedidoId, attempt = 0) => {
       shipping_metadata: { error: err.message }
     })
 
-    throw err
+    console.error('[JOB] falha definitiva após', MAX_ATTEMPTS, 'tentativas para pedido', pedidoId)
   } finally {
     _shipmentJobLocks.delete(pedidoId)
   }
