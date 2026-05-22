@@ -1108,21 +1108,18 @@ export const syncTracking = async () => {
     try {
       const info = trackingMap[order.melhorenvio_shipment_id]
       if (!info) {
-        // ID not found in ME — label still pending or not yet purchased
         continue
       }
 
       const meStatus = info.status || null
-      // ME returns the carrier tracking code in the `tracking` field
       const trackingCode = info.tracking || null
 
       const shippingUpdate = {}
 
-      if (meStatus) {
+      if (meStatus && meStatus !== order.shipping_status) {
         shippingUpdate.shipping_status = meStatus
       }
 
-      // Save tracking code as soon as ME assigns one (released or later)
       if (trackingCode && !order.tracking_number) {
         shippingUpdate.tracking_number = trackingCode
       }
@@ -1131,7 +1128,6 @@ export const syncTracking = async () => {
         await orderRepo.updateOrderShippingInfo(order.id, shippingUpdate)
       }
 
-      // Map ME delivery status to our order status
       if (meStatus === 'delivered' && order.status !== 'ENTREGUE') {
         await orderRepo.updateOrderStatus(order.id, 'ENTREGUE')
         console.log(`syncTracking: pedido ${order.id} → ENTREGUE (tracking: ${trackingCode})`)

@@ -78,10 +78,8 @@ if (process.env.NODE_ENV === 'production') {
   app.use(cors({
     origin: (origin, callback) => {
       // allow non-browser requests like curl/postman (no origin)
-      if (!origin) return callback(null, true)
-      // useful debug log to inspect actual origin sent by browser
-      console.log('CORS origin request:', origin)
-      if (isOriginAllowed(origin)) return callback(null, true)
+        if (!origin) return callback(null, true)
+        if (isOriginAllowed(origin)) return callback(null, true)
       console.warn('Blocked CORS origin:', origin, 'allowed:', allowedOrigins)
       return callback(new Error('Not allowed by CORS'), false)
     },
@@ -180,7 +178,7 @@ try {
 server.listen(PORT, () => {
   console.log(`🚀 Rodando em http://localhost:${PORT}`)
 
-  cron.schedule('0 * * * *', async () => {
+  cron.schedule('0 */10 * * *', async () => {
     await orderService.syncTracking();
   });
 })
