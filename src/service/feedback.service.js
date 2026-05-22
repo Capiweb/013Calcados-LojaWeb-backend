@@ -152,6 +152,25 @@ export const getProductFeedbacks = async (
 }
 
 /**
+ * Obtém todos os feedbacks (geral)
+ */
+export const getAllFeedbacks = async ({ page = 1, limit = 10 } = {}) => {
+  const skip = (page - 1) * limit
+  const feedbacks = await feedbackRepo.findAllFeedbacks({ skip, take: limit })
+  const total = await feedbackRepo.countAllFeedbacks()
+
+  return {
+    feedbacks,
+    pagination: {
+      total,
+      page,
+      limit,
+      pages: Math.ceil(total / limit),
+    },
+  }
+}
+
+/**
  * Obtém estatísticas de avaliação de um produto
  * @param {string} produtoId - ID do produto
  * @returns {Promise<Object>} - Estatísticas de avaliação

@@ -75,6 +75,34 @@ export const deleteFeedback = async (feedbackId) => {
   })
 }
 
+export const findAllFeedbacks = async ({ skip = 0, take = 10 } = {}) => {
+  return prisma.feedback.findMany({
+    include: {
+      usuario: {
+        select: {
+          id: true,
+          nome: true,
+        },
+      },
+      produto: {
+        select: {
+          id: true,
+          nome: true,
+        },
+      },
+    },
+    skip,
+    take,
+    orderBy: {
+      criadoEm: 'desc',
+    },
+  })
+}
+
+export const countAllFeedbacks = async () => {
+  return prisma.feedback.count()
+}
+
 export const findFeedbackById = async (feedbackId) => {
   return prisma.feedback.findUnique({
     where: { id: feedbackId },

@@ -240,6 +240,7 @@ router.post(
  *                   type: string
  *                   example: "Produto não encontrado"
  */
+router.get('/', feedbackController.getAllFeedbacks)
 router.get('/product/:produtoId', feedbackController.getProductFeedbacks)
 
 /**

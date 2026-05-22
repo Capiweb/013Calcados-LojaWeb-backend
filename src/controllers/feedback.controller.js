@@ -42,6 +42,20 @@ export const getProductFeedbacks = async (req, res) => {
   }
 }
 
+export const getAllFeedbacks = async (req, res) => {
+  try {
+    const { page = 1, limit = 10 } = req.query
+    const result = await feedbackService.getAllFeedbacks({
+      page: parseInt(page, 10),
+      limit: parseInt(limit, 10),
+    })
+    return res.status(200).json(result)
+  } catch (error) {
+    console.error('Erro ao listar todos os feedbacks:', error)
+    return res.status(500).json({ error: 'Erro ao listar avaliações' })
+  }
+}
+
 export const getProductRatingStats = async (req, res) => {
   try {
     const { produtoId } = req.params
