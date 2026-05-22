@@ -128,13 +128,11 @@ export const listProducts = async (query) => {
 
   const where = buildWhere(query)
 
-  // parse sort param: accept formats like "-createdAt" or "createdAt"
-  let orderBy
+  let orderBy = { estrelas: 'desc' }
   if (query.sort) {
     const raw = String(query.sort)
     const dir = raw.startsWith('-') ? 'desc' : 'asc'
     const fieldRaw = raw.replace(/^-/, '')
-    // map common API field names to DB fields
     const fieldMap = {
       createdAt: 'criadoEm',
       criadoEm: 'criadoEm',
