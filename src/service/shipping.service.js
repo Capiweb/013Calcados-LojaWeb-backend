@@ -100,12 +100,13 @@ export const calculateShipping = async (userId, postalCode) => {
 
     // garante que é array antes de filtrar
     if (Array.isArray(data)) {
+      // Remove transportadoras que retornaram erro na cotação
       data = data.filter(carrier => !carrier.error);
 
-      // Filtra apenas serviços de transportadoras que our sistema consegue gerar etiqueta
+      // Filtra apenas transportadoras parceiras oficiais do Melhor Envio
+      // que funcionam com dados básicos (sem contrato/CNPJ extras)
       // Configurável via MELHOR_ENVIO_ALLOWED_SERVICES (ex: "1,2,3")
-      // Padrão: 1=PAC, 2=SEDEX (Correios) — mais estáveis e sem campos extras
-      const allowedServices = (process.env.MELHOR_ENVIO_ALLOWED_SERVICES || '1,2')
+      const allowedServices = (process.env.MELHOR_ENVIO_ALLOWED_SERVICES || '')
         .split(',')
         .map(id => id.trim())
         .filter(id => id.length > 0)
@@ -113,6 +114,16 @@ export const calculateShipping = async (userId, postalCode) => {
 
       if (allowedServices.length > 0) {
         data = data.filter(carrier => allowedServices.includes(Number(carrier.id)))
+      } else {
+        // Sem whitelist numérica: filtra por empresas parceiras conhecidas
+        const allowedCompanies = [
+          'correios', 'jadlog', 'azul cargo express', 'azul',
+          'latam cargo', 'latam', 'buslog', 'loggi', 'j&t express', 'jt express'
+        ]
+        data = data.filter(carrier => {
+          const companyName = (carrier.company?.name || carrier.company || '').toLowerCase().trim()
+          return allowedCompanies.some(name => companyName.includes(name))
+        })
       }
     }
 
