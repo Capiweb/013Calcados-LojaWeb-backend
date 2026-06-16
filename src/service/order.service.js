@@ -859,6 +859,10 @@ export const handleMpNotification = async (body) => {
   }
 }
 
+export const updateOrderStatus = async (pedidoId, status) => {
+  return orderRepo.updateOrderStatus(pedidoId, status)
+}
+
 export const listAllOrders = async (filters = {}) => {
   // filters can include where conditions; default returns all orders ordered by createdAt desc
   return orderRepo.findAllOrders(filters)

@@ -101,6 +101,19 @@ export const calculateShipping = async (userId, postalCode) => {
     // garante que é array antes de filtrar
     if (Array.isArray(data)) {
       data = data.filter(carrier => !carrier.error);
+
+      // Filtra apenas serviços de transportadoras que our sistema consegue gerar etiqueta
+      // Configurável via MELHOR_ENVIO_ALLOWED_SERVICES (ex: "1,2,3")
+      // Padrão: 1=PAC, 2=SEDEX (Correios) — mais estáveis e sem campos extras
+      const allowedServices = (process.env.MELHOR_ENVIO_ALLOWED_SERVICES || '1,2')
+        .split(',')
+        .map(id => id.trim())
+        .filter(id => id.length > 0)
+        .map(Number)
+
+      if (allowedServices.length > 0) {
+        data = data.filter(carrier => allowedServices.includes(Number(carrier.id)))
+      }
     }
 
     if (!res.ok) {

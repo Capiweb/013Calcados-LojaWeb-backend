@@ -153,6 +153,7 @@ router.get('/pending', authMiddleware, orderController.getPendingOrder)
  */
 router.get('/admin', authMiddleware, adminMiddleware, orderController.getAllOrders)
 router.get('/admin/:id', authMiddleware, adminMiddleware, orderController.getOrderByIdAdmin)
+router.patch('/admin/:id/status', authMiddleware, adminMiddleware, orderController.updateOrderStatusAdmin)
 
 /**
  * @swagger

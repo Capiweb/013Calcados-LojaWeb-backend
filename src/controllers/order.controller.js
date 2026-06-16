@@ -61,6 +61,21 @@ export const checkout = async (req, res) => {
       return res.status(400).json({ error: 'Carrinho vazio' })
     }
 
+    // Validar estoque antes de criar preferência no Mercado Pago
+    for (const it of cart.itens) {
+      const variacao = it.produtoVariacao
+      if (!variacao) {
+        return res.status(400).json({ error: `Variação do item ${it.id} não encontrada` })
+      }
+      const estoqueDisponivel = Number(variacao.estoque || 0)
+      if (estoqueDisponivel < Number(it.quantidade || 1)) {
+        const nomeProduto = variacao.produto?.nome || 'Produto'
+        return res.status(400).json({
+          error: `Estoque insuficiente para "${nomeProduto}" (tamanho: ${variacao.tamanho || ''}). Disponível: ${estoqueDisponivel}, solicitado: ${it.quantidade}`
+        })
+      }
+    }
+
     // build items for Mercado Pago preference using richer data from cart/product
     const items = (cart.itens || []).map((it) => {
       const pv = it.produtoVariacao || {}
@@ -327,6 +342,27 @@ export const getOrderByIdAdmin = async (req, res) => {
   } catch (error) {
     console.error('getOrderByIdAdmin error:', error)
     return res.status(500).json({ error: 'Erro ao obter pedido' })
+  }
+}
+
+export const updateOrderStatusAdmin = async (req, res) => {
+  try {
+    const { id } = req.params
+    const { status } = req.body
+
+    const validStatuses = ['PENDENTE', 'PAGO', 'CANCELADO', 'ENVIADO', 'ENTREGUE']
+    if (!status || !validStatuses.includes(status)) {
+      return res.status(400).json({ error: `Status inválido. Valores aceitos: ${validStatuses.join(', ')}` })
+    }
+
+    const pedido = await orderService.getOrderById(id)
+    if (!pedido) return res.status(404).json({ error: 'Pedido não encontrado' })
+
+    const updated = await orderService.updateOrderStatus(id, status)
+    return res.status(200).json(updated)
+  } catch (error) {
+    console.error('updateOrderStatusAdmin error:', error)
+    return res.status(500).json({ error: 'Erro ao atualizar status do pedido' })
   }
 }
 
