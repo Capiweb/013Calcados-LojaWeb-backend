@@ -121,9 +121,12 @@ export const createPaymentForPedido = async (pedidoId, pagamentoId, pagamentoDat
   })
 }
 
-export const findAllOrders = async ({ where = {}, orderBy = { criadoEm: 'desc' }, include = { itens: true, pagamento: true, usuario: true } } = {}) => {
+export const findAllOrders = async ({ where = {}, orderBy = { criadoEm: 'desc' }, include = { itens: true, pagamento: true, usuario: true }, page, limit = 50 } = {}) => {
   try {
-    return await prisma.pedido.findMany({ where, orderBy, include })
+    const queryOpts = { where, orderBy, include }
+    queryOpts.skip = page ? (page - 1) * limit : 0
+    queryOpts.take = limit
+    return await prisma.pedido.findMany(queryOpts)
   } catch (err) {
     // If a validation error occurs (deployed DB/schema mismatch), retry with safer include
     if (err?.name === 'PrismaClientValidationError' || err?.code === 'P2022') {

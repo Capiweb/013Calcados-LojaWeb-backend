@@ -313,9 +313,11 @@ export const getAllOrders = async (req, res) => {
     // optional query filters could be passed (status, userId, date range)
     const filters = {}
     // map query params to prisma where if provided
-    const { status, userId } = req.query
+    const { status, userId, page, limit } = req.query
     if (status) filters.where = { ...(filters.where || {}), status }
     if (userId) filters.where = { ...(filters.where || {}), usuarioId: userId }
+    if (page) filters.page = parseInt(page, 10)
+    if (limit) filters.limit = parseInt(limit, 10)
 
     const pedidos = await orderService.listAllOrders(filters)
     return res.status(200).json(pedidos)

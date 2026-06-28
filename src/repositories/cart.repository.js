@@ -105,9 +105,9 @@ export const clearCart = async (usuarioId) => {
 }
 
 
-export const findAllCarts = async () => {
+export const findAllCarts = async (page, limit) => {
   try {
-    return await prisma.carrinho.findMany({
+    const queryOpts = {
       include: {
         usuario: true,
         itens: {
@@ -118,7 +118,12 @@ export const findAllCarts = async () => {
           }
         }
       }
-    })
+    }
+    if (page && limit) {
+      queryOpts.skip = (page - 1) * limit
+      queryOpts.take = limit
+    }
+    return await prisma.carrinho.findMany(queryOpts)
   } catch (err) {
     // If the DB doesn't have the new 'cores' column yet, Prisma may throw P2022
     // referencing ProdutoVariacao.cores. In that case, retry with a safer select

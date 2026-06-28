@@ -173,6 +173,12 @@ model Pedido {
   pagamento               Pagamento?
   usuario                 Usuario      @relation(fields: [usuarioId], references: [id])
   itens                   PedidoItem[]
+
+  @@index([status])
+  @@index([criadoEm])
+  @@index([usuarioId])
+  @@index([melhorenvio_shipment_id])
+  @@index([status, criadoEm])
 }
 
 /// *
@@ -201,6 +207,10 @@ model Pagamento {
   status      StatusPagamento
   criadoEm    DateTime        @default(now())
   pedido      Pedido          @relation(fields: [pedidoId], references: [id])
+
+  @@index([pagamentoId])
+  @@index([status])
+  @@index([criadoEm])
 }
 
 /// *
