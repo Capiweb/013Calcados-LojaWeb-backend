@@ -84,9 +84,7 @@ export const createOrderFromCart = async (userId, endereco, melhorenvio_service_
     try {
       const fresh = await orderRepo.getOrderById(existingPending.id)
       if (!fresh || fresh.status !== 'PENDENTE') {
-        console.log(`createOrderFromCart: pedido ${existingPending.id} já não está mais PENDENTE (status=${fresh?.status}). Não será reusado; criando novo pedido.`)
       } else {
-        console.log(`createOrderFromCart: reusando pedido PENDENTE existente ${existingPending.id} para o usuário ${userId}`)
         // Recalculate total from current cart items applying coupon discount per item
         let total = 0
         const itensData = cart.itens.map((item) => {
@@ -107,7 +105,6 @@ export const createOrderFromCart = async (userId, endereco, melhorenvio_service_
         //    aconteça com a recriação dos itens.
         try {
           await orderRepo.updateOrderTotal(existingPending.id, Number((total + freteValue).toFixed(2)))
-          console.log(`createOrderFromCart: total do pedido ${existingPending.id} atualizado para ${(total + freteValue).toFixed(2)} (cupomDesconto=${cupomDesconto})`)
         } catch (e) {
           console.warn('createOrderFromCart: falha ao atualizar total do pedido pendente', e?.message || e)
         }
@@ -210,34 +207,6 @@ export const createMercadoPagoPreference = async (pedido) => {
   }
 
   const url = `${MP_BASE}/checkout/preferences`
-  // Debug logs (temporarily) - do not commit secrets to public logs
-  try {
-    console.log('MP request url:', url)
-    console.log('MP request headers: Authorization: Bearer <REDACTED>, Content-Type: application/json')
-    console.log('MP request body:', JSON.stringify(body, null, 2))
-  } catch (e) {
-    // ignore logging errors
-  }
-
-  // quick token check to surface clearer error if token is invalid
-  if (MP_ACCESS_TOKEN) {
-    try {
-      const check = await fetch(`${MP_BASE}/users/me`, { headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` } })
-      if (!check.ok) {
-        const txt = await check.text()
-        // Provide a friendly, actionable hint when MP returns 404 for token check
-        let hint = ''
-        if (check.status === 404) {
-          hint = ` Possible causes: you may be using the Public Key (frontend) instead of the Access Token, the token belongs to a different environment/account, or the account isn't enabled for this API. Check Mercado Pago Dashboard > Credentials and copy the Access Token (not the Public Key).`
-        }
-        throw new Error(`MP token check failed: ${check.status} ${txt}. Token(${maskToken(MP_ACCESS_TOKEN)})${hint}`)
-      }
-    } catch (err) {
-      // rethrow with context and masked token
-      if (String(err.message).includes('MP token check failed')) throw err
-      throw new Error(`MP token validation error: ${err.message}. Token=${maskToken(MP_ACCESS_TOKEN)}`)
-    }
-  }
 
   const res = await fetch(url, {
     method: 'POST',
@@ -251,7 +220,6 @@ export const createMercadoPagoPreference = async (pedido) => {
   const xRequestId = res.headers && typeof res.headers.get === 'function' ? res.headers.get('x-request-id') : undefined
   const rawText = await res.text()
   if (!res.ok) {
-    console.error(`MP create preference error: status=${res.status} x-request-id=${xRequestId} body=${rawText}`)
     throw new Error(`MP error: ${res.status} ${rawText}`)
   }
 
@@ -259,15 +227,7 @@ export const createMercadoPagoPreference = async (pedido) => {
   try {
     data = JSON.parse(rawText)
   } catch (e) {
-    console.warn('MP create preference: failed to parse JSON, raw body:', rawText)
     throw new Error('MP create preference: invalid JSON response')
-  }
-
-  // Debug log: preference id and init_point if present
-  try {
-    console.log(`MP preference created: preference_id=${data.id || data.preference_id} init_point=${data.init_point || data.sandbox_init_point} x-request-id=${xRequestId}`)
-  } catch (e) {
-    // ignore
   }
 
   return data
@@ -633,21 +593,16 @@ export const handleMpNotification = async (body) => {
     // --- Side-effects (executa apenas 1 vez real) ---
     if (pedido && shouldRunSideEffects) {
       const res = await safeDecrementStockForPedido(pedido)
-      console.log("Estou no decremento: ", res)
 
       if (!res.ok) {
         await orderRepo.updatePaymentStatus(paymentId, 'REJEITADO')
         return { ok: false, reason: res.reason }
       }
 
-      // Sincroniza o total do pedido com o valor real cobrado pelo Mercado Pago.
-      // Isso garante que qualquer desconto de cupom aplicado por item (com arredondamento
-      // individual) seja refletido corretamente no banco de dados.
       const mpTransactionAmount = paymentData.transaction_amount
       if (mpTransactionAmount != null && Number(mpTransactionAmount) > 0) {
         try {
           await orderRepo.updateOrderTotal(pedido.id, Number(Number(mpTransactionAmount).toFixed(2)))
-          console.log(`processPaymentById: total do pedido ${pedido.id} atualizado para ${mpTransactionAmount} (transaction_amount do MP)`)
         } catch (e) {
           console.warn('processPaymentById: falha ao atualizar total do pedido com transaction_amount do MP', e?.message || e)
         }
@@ -656,12 +611,9 @@ export const handleMpNotification = async (body) => {
       await orderRepo.updateOrderStatus(pedido.id, 'PAGO')
       await cartRepo.clearCart(pedido.usuarioId)
 
-      // Marcar o cupom como usado agora que o pagamento foi confirmado.
-      // O cupomCodigo é armazenado no pedido para que o webhook saiba qual cupom usar.
       if (pedido.cupomCodigo) {
         try {
           await cupomService.marcarComoUsado(pedido.cupomCodigo, pedido.usuarioId)
-          console.log(`processPaymentById: cupom ${pedido.cupomCodigo} marcado como usado para pedido ${pedido.id}`)
         } catch (e) {
           console.warn('processPaymentById: falha ao marcar cupom como usado', e?.message || e)
         }
@@ -817,42 +769,32 @@ export const handleMpNotification = async (body) => {
       // Treat as external_reference / pedidoId: search payments by external_reference
       try {
         const searchUrl = `${MP_BASE}/v1/payments/search?external_reference=${encodeURIComponent(incomingId)}`
-        console.log(`MP: buscando pagamentos por external_reference (search) ${searchUrl} — token: ${maskToken(MP_ACCESS_TOKEN)}`)
         const sres = await fetch(searchUrl, { headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` } })
         if (!sres.ok) {
-          const txt = await sres.text().catch(() => '<no-body>')
-          console.error(`MP search returned error for external_reference ${incomingId}: status=${sres.status} body=${txt}`)
           return { ok: true, note: 'mp_search_failed' }
         }
         const sdata = await sres.json()
         const payments = sdata.results || sdata || []
         if (!payments || payments.length === 0) {
-          console.log(`handleMpNotification: no payments found for external_reference ${incomingId}`)
           return { ok: true, note: 'no_payments_for_external_reference' }
         }
         const processed = []
         for (const p of payments) {
           if (p && p.id) {
-            try { processed.push(await processPaymentById(p.id)) } catch (e) { console.error('processing payment from search failed', e?.message || e) }
+            try { processed.push(await processPaymentById(p.id)) } catch (e) { /**/ }
           }
         }
         return { ok: true, processed }
       } catch (e) {
-        console.error('handleMpNotification: payment search failed', e?.message || e)
         return { ok: true, note: 'mp_search_exception' }
       }
     }
 
-    // If numeric id (MP payment id or order id) -> try to process as a payment id directly
-    // NOTE: o MP pode enviar tanto o payment.id quanto um order.id; aqui tentamos primeiro
-    // consultar /v1/payments/{id} porque essa rota é a fonte de verdade para o status do pagamento.
     const numericCheck = /^[0-9]+$/.test(String(incomingId))
     if (numericCheck) {
-      console.log(`handleMpNotification: id numérico recebido (${incomingId}) — consultando MP /v1/payments/${incomingId}`)
       return await processPaymentById(incomingId)
     }
 
-    // Fallback para outros formatos: tentar processar como pagamento
     return await processPaymentById(incomingId)
   } catch (err) {
     throw err
@@ -950,34 +892,31 @@ export const startShipmentPurchaseJob = async (pedidoId, attempt = 0) => {
     if (!pedido.melhorenvio_shipment_id) {
       const products = (pedido.itens || []).map(it => {
         const unitValue = Number(it.preco || 0)
-        // Melhor Envio exige que insurance_value seja igual ao unitary_value
-        // e deve ser >= 1.00
-        const insuranceValue = Math.max(1, unitValue)
         return {
           name: it.nome || 'Tênis',
           quantity: it.quantidade,
           unitary_value: unitValue,
-          insurance_value: insuranceValue,
-          weight: 1,
-          length: 20,
-          height: 10,
-          width: 15,
-          peso: 1,
-          comprimento: 20
         }
       })
+
+      // insurance_value total = soma de todos os produtos
+      const totalInsuranceValue = products.reduce((acc, p) => acc + (p.unitary_value * p.quantity), 0)
 
       const ITEM_WEIGHT = Number(process.env.ITEM_WEIGHT);
       const ITEM_LENGTH = Number(process.env.ITEM_LENGTH);
       const ITEM_HEIGHT = Number(process.env.ITEM_HEIGHT);
       const ITEM_WIDTH = Number(process.env.ITEM_WIDTH);
 
-      const volumes = (pedido.itens || []).map(() => ({
-        weight: ITEM_WEIGHT,
-        length: ITEM_LENGTH,
-        height: ITEM_HEIGHT,
-        width: ITEM_WIDTH,
-      }));
+      // Melhor Envio: Correios não aceita múltiplos volumes em uma única requisição.
+      // Quando houver apenas 1 volume, enviamos normal; >1 volumes exigiria N chamadas.
+      // Para simplificar, agregamos tudo em 1 volume somando peso e mantendo dimensões máximas.
+      const volumes = (() => {
+        const items = pedido.itens || []
+        if (items.length === 0) return [{ weight: ITEM_WEIGHT, length: ITEM_LENGTH, height: ITEM_HEIGHT, width: ITEM_WIDTH }]
+        // Aggregate: sum weights, use max dimensions
+        const totalWeight = items.reduce((acc, it) => acc + (it.quantidade || 1) * ITEM_WEIGHT, 0)
+        return [{ weight: totalWeight || ITEM_WEIGHT, length: ITEM_LENGTH, height: ITEM_HEIGHT, width: ITEM_WIDTH }]
+      })()
 
       const user = await findUserById(pedido.usuarioId);
 
@@ -987,12 +926,19 @@ export const startShipmentPurchaseJob = async (pedidoId, attempt = 0) => {
         throw new Error('Documento do destinatário ausente. Certifique-se de que o usuário tenha CPF/CNPJ cadastrado.')
       }
 
+      // Sender document (CPF/CNPJ da loja) — obrigatório no Melhor Envio
+      const fromDocument = (process.env.MELHOR_ENVIO_FROM_DOCUMENT || '').replace(/\D/g, '')
+      const fromCompanyDocument = (process.env.MELHOR_ENVIO_FROM_COMPANY_DOCUMENT || '').replace(/\D/g, '')
+
       const shipmentPayload = {
         service: pedido.melhorenvio_service_id,
         from: {
           name: process.env.MELHOR_ENVIO_FROM_NAME,
           phone: process.env.MELHOR_ENVIO_FROM_PHONE,
           email: process.env.MELHOR_ENVIO_FROM_EMAIL,
+          document: fromDocument || undefined,
+          company_document: fromCompanyDocument || undefined,
+          state_register: 'ISENTO',
           address: process.env.MELHOR_ENVIO_FROM_ADDRESS,
           number: process.env.MELHOR_ENVIO_FROM_NUMBER,
           district: process.env.MELHOR_ENVIO_FROM_DISTRICT,
@@ -1015,6 +961,12 @@ export const startShipmentPurchaseJob = async (pedidoId, attempt = 0) => {
         },
         products,
         volumes,
+        options: {
+          insurance_value: Math.max(1, totalInsuranceValue),
+          receipt: false,
+          own_hand: false,
+          reverse: false,
+        },
       }
 
       console.log('[JOB] criando shipment (Melhor Envio) para pedido', pedidoId, { to: shipmentPayload.to?.postal_code, service: shipmentPayload.service })

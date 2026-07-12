@@ -115,10 +115,12 @@ export const calculateShipping = async (userId, postalCode) => {
       if (allowedServices.length > 0) {
         data = data.filter(carrier => allowedServices.includes(Number(carrier.id)))
       } else {
-        // Sem whitelist numérica: filtra por empresas parceiras conhecidas
+        // Apenas Correios por padrão (PAC e SEDEX) — transportadoras que funcionam
+        // sem contrato adicional, CNPJ, CNAE ou agência.
+        // Outras (Jadlog, Azul, LATAM, Buslog, Loggi, J&T) exigem dados extras
+        // que frequentemente causam falha na criação da etiqueta.
         const allowedCompanies = [
-          'correios', 'jadlog', 'azul cargo express', 'azul',
-          'latam cargo', 'latam', 'buslog', 'loggi', 'j&t express', 'jt express'
+          'correios'
         ]
         data = data.filter(carrier => {
           const companyName = (carrier.company?.name || carrier.company || '').toLowerCase().trim()
@@ -154,7 +156,20 @@ export const createShipment = async (shipmentPayload) => {
   let data
   try { data = JSON.parse(text) } catch (e) { data = text }
   if (!res.ok) {
-    const err = new Error('createShipment failed')
+    console.error('[createShipment] Melhor Envio API error', {
+      url,
+      status: res.status,
+      responseBody: data,
+      payloadSummary: {
+        service: shipmentPayload.service,
+        fromPostal: shipmentPayload.from?.postal_code,
+        toPostal: shipmentPayload.to?.postal_code,
+        toDocument: shipmentPayload.to?.document ? `${String(shipmentPayload.to.document).slice(0, 3)}...` : undefined,
+        productsCount: shipmentPayload.products?.length,
+        volumesCount: shipmentPayload.volumes?.length
+      }
+    })
+    const err = new Error(`createShipment failed: ${res.status} — ${typeof data === 'object' ? JSON.stringify(data) : String(data).slice(0, 500)}`)
     err.status = res.status
     err.body = data
     throw err
