@@ -514,6 +514,23 @@ export const getPendingOrder = async (req, res) => {
   }
 }
 
+/**
+ * POST /api/orders/admin/:id/shipment/retry
+ * Admin: reseta os dados de envio e dispara novo job de criação de etiqueta.
+ */
+export const retryOrderShipment = async (req, res) => {
+  try {
+    const { id } = req.params
+    const result = await orderService.retryOrderShipment(id)
+    return res.status(200).json(result)
+  } catch (error) {
+    console.error('retryOrderShipment error:', error)
+    if (error.message.includes('não encontrado')) return res.status(404).json({ error: error.message })
+    if (error.message.includes('não está com status PAGO')) return res.status(400).json({ error: error.message })
+    return res.status(500).json({ error: 'Erro ao retentar criação de etiqueta' })
+  }
+}
+
 export const addFreight = async (req, res) => {
   try {
     const { id } = req.params

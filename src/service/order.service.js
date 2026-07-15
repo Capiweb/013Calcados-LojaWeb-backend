@@ -1018,6 +1018,114 @@ export const startShipmentPurchaseJob = async (pedidoId, attempt = 0) => {
   }
 }
 
+/**
+ * Cria apenas o shipment no carrinho do Melhor Envio (sem comprar).
+ * Usado pelo admin (botão "Retry") para pedidos PAGOS com shipping_status = 'FAILED'.
+ */
+export const retryOrderShipment = async (pedidoId) => {
+  const pedido = await orderRepo.getOrderById(pedidoId)
+  if (!pedido) throw new Error('Pedido não encontrado')
+  if (pedido.status !== 'PAGO') {
+    throw new Error('Pedido não está com status PAGO. Só é possível retentar etiqueta de pedidos pagos.')
+  }
+  if (!pedido.itens || pedido.itens.length === 0) {
+    throw new Error('Pedido sem itens - não é possível criar shipment')
+  }
+
+  // Reseta os campos de shipping para forçar recriação do zero
+  await orderRepo.updateOrderShippingInfo(pedidoId, {
+    melhorenvio_shipment_id: null,
+    melhorenvio_purchase_id: null,
+    tracking_number: null,
+    label_url: null,
+    shipping_status: null,
+    shipping_metadata: null,
+  })
+
+  const products = (pedido.itens || []).map(it => {
+    const unitValue = Number(it.preco || 0)
+    return {
+      name: it.nome || 'Tênis',
+      quantity: it.quantidade,
+      unitary_value: unitValue,
+    }
+  })
+
+  const totalInsuranceValue = products.reduce((acc, p) => acc + (p.unitary_value * p.quantity), 0)
+
+  const ITEM_WEIGHT = Number(process.env.ITEM_WEIGHT)
+  const ITEM_LENGTH = Number(process.env.ITEM_LENGTH)
+  const ITEM_HEIGHT = Number(process.env.ITEM_HEIGHT)
+  const ITEM_WIDTH = Number(process.env.ITEM_WIDTH)
+
+  const volumes = (() => {
+    const items = pedido.itens || []
+    if (items.length === 0) return [{ weight: ITEM_WEIGHT, length: ITEM_LENGTH, height: ITEM_HEIGHT, width: ITEM_WIDTH }]
+    const totalWeight = items.reduce((acc, it) => acc + (it.quantidade || 1) * ITEM_WEIGHT, 0)
+    return [{ weight: totalWeight || ITEM_WEIGHT, length: ITEM_LENGTH, height: ITEM_HEIGHT, width: ITEM_WIDTH }]
+  })()
+
+  const user = await findUserById(pedido.usuarioId)
+
+  const rawDocument = user.documento || ''
+  const sanitizedDocument = String(rawDocument).replace(/\D/g, '')
+  if (!sanitizedDocument) {
+    throw new Error('Documento do destinatário ausente. Certifique-se de que o usuário tenha CPF/CNPJ cadastrado.')
+  }
+
+  const fromDocument = (process.env.MELHOR_ENVIO_FROM_DOCUMENT || process.env.MELHOR_ENVIO_FROM_COMPANY_DOCUMENT || '').replace(/\D/g, '')
+
+  const shipmentPayload = {
+    service: pedido.melhorenvio_service_id,
+    from: {
+      name: process.env.MELHOR_ENVIO_FROM_NAME,
+      phone: process.env.MELHOR_ENVIO_FROM_PHONE,
+      email: process.env.MELHOR_ENVIO_FROM_EMAIL,
+      document: fromDocument || undefined,
+      state_register: 'ISENTO',
+      address: process.env.MELHOR_ENVIO_FROM_ADDRESS,
+      number: process.env.MELHOR_ENVIO_FROM_NUMBER,
+      district: process.env.MELHOR_ENVIO_FROM_DISTRICT,
+      city: process.env.MELHOR_ENVIO_FROM_CITY,
+      state_abbr: process.env.MELHOR_ENVIO_FROM_STATE,
+      postal_code: process.env.MELHOR_ENVIO_FROM_POSTAL_CODE
+    },
+    to: {
+      name: user.nome,
+      email: user.email,
+      phone: user.telefone || pedido.telefone || '',
+      address: pedido.rua,
+      number: pedido.numero,
+      complement: pedido.complemento || null,
+      district: pedido.bairro,
+      city: pedido.cidade,
+      state_abbr: pedido.estado,
+      document: sanitizedDocument,
+      postal_code: pedido.cep.replace(/\D/g, '')
+    },
+    products,
+    volumes,
+    options: {
+      insurance_value: Math.max(1, totalInsuranceValue),
+      receipt: false,
+      own_hand: false,
+      reverse: false,
+    },
+  }
+
+  console.log('[RETRY] criando shipment (Melhor Envio) para pedido', pedidoId, { to: shipmentPayload.to?.postal_code, service: shipmentPayload.service })
+  const createRes = await shippingService.createShipment(shipmentPayload)
+  console.log('[RETRY] createShipment response', { pedidoId, shipmentId: createRes?.id || createRes?.shipment_id, raw: createRes })
+
+  await orderRepo.updateOrderShippingInfo(pedidoId, {
+    melhorenvio_shipment_id: createRes.id,
+    shipping_status: 'PURCHASED',
+    shipping_metadata: createRes,
+  })
+
+  return { message: 'Etiqueta criada no carrinho do Melhor Envio', shipment_id: createRes.id }
+}
+
 export const addFreightToOrder = async (orderId, freteValue) => {
   const order = await orderRepo.getOrderById(orderId)
   if (!order) throw new Error('Pedido não encontrado')
