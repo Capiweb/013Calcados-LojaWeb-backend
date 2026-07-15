@@ -926,9 +926,8 @@ export const startShipmentPurchaseJob = async (pedidoId, attempt = 0) => {
         throw new Error('Documento do destinatário ausente. Certifique-se de que o usuário tenha CPF/CNPJ cadastrado.')
       }
 
-      // Sender document (CPF/CNPJ da loja) — obrigatório no Melhor Envio
-      const fromDocument = (process.env.MELHOR_ENVIO_FROM_DOCUMENT || '').replace(/\D/g, '')
-      const fromCompanyDocument = (process.env.MELHOR_ENVIO_FROM_COMPANY_DOCUMENT || '').replace(/\D/g, '')
+      // Sender document (CPF da loja) — obrigatório no Melhor Envio
+      const fromDocument = (process.env.MELHOR_ENVIO_FROM_DOCUMENT || process.env.MELHOR_ENVIO_FROM_COMPANY_DOCUMENT || '').replace(/\D/g, '')
 
       const shipmentPayload = {
         service: pedido.melhorenvio_service_id,
@@ -937,7 +936,6 @@ export const startShipmentPurchaseJob = async (pedidoId, attempt = 0) => {
           phone: process.env.MELHOR_ENVIO_FROM_PHONE,
           email: process.env.MELHOR_ENVIO_FROM_EMAIL,
           document: fromDocument || undefined,
-          company_document: fromCompanyDocument || undefined,
           state_register: 'ISENTO',
           address: process.env.MELHOR_ENVIO_FROM_ADDRESS,
           number: process.env.MELHOR_ENVIO_FROM_NUMBER,
