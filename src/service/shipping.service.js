@@ -292,13 +292,16 @@ export const getTrackingBatch = async (shipmentIds) => {
   const text = await res.text()
   let data
   try { data = JSON.parse(text) } catch (e) { data = text }
+  console.log('[getTrackingBatch] raw response:', JSON.stringify(data).slice(0, 500))
   if (!res.ok) {
     const err = new Error('getTrackingBatch failed')
     err.status = res.status
     err.body = data
     throw err
   }
-  return data
+  // ME returns { data: { shipmentId: { status, tracking } } } — unwrap
+  const unwrapped = data?.data ?? data
+  return unwrapped
 }
 
 export default { calculateShipping }

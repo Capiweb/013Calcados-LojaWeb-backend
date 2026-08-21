@@ -1149,32 +1149,36 @@ export const addFreightToOrder = async (orderId, freteValue) => {
  */
 export const syncTracking = async () => {
   const orders = await orderRepo.getOrdersWithShipmentId()
+  console.log(`[syncTracking] ${orders.length} pedidos ativos com shipment ID`)
   if (orders.length === 0) return
 
   const shipmentIds = orders.map(o => o.melhorenvio_shipment_id)
 
   let trackingMap = {}
   try {
-    // Batch call — one request for all orders
     const batchResult = await shippingService.getTrackingBatch(shipmentIds)
-    // ME returns an object keyed by shipment ID
     if (batchResult && typeof batchResult === 'object') {
       trackingMap = batchResult
     }
+    console.log(`[syncTracking] ME retornou tracking para ${Object.keys(trackingMap).length} shipments`)
   } catch (err) {
     console.error('syncTracking: getTrackingBatch failed:', err.message)
     return
   }
 
+  let atualizados = 0
   for (const order of orders) {
     try {
       const info = trackingMap[order.melhorenvio_shipment_id]
       if (!info) {
+        console.log(`[syncTracking] shipment ${order.melhorenvio_shipment_id} (pedido ${order.id}) não retornado pelo ME`)
         continue
       }
 
       const meStatus = info.status || null
       const trackingCode = info.tracking || null
+
+      console.log(`[syncTracking] pedido ${order.id} shipment=${order.melhorenvio_shipment_id} meStatus=${meStatus} tracking=${trackingCode}`)
 
       const shippingUpdate = {}
 
@@ -1188,6 +1192,7 @@ export const syncTracking = async () => {
 
       if (Object.keys(shippingUpdate).length > 0) {
         await orderRepo.updateOrderShippingInfo(order.id, shippingUpdate)
+        atualizados++
       }
 
       if (meStatus === 'delivered' && order.status !== 'ENTREGUE') {
@@ -1201,6 +1206,7 @@ export const syncTracking = async () => {
       console.error(`syncTracking: erro no pedido ${order.id}:`, error.message)
     }
   }
+  console.log(`[syncTracking] finalizado: ${atualizados} pedidos atualizados de ${orders.length} verificados`)
 }
 
 export async function getOrders(melhorenvioShipmentId) {

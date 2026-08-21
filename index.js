@@ -178,8 +178,8 @@ try {
 server.listen(PORT, () => {
   console.log(`🚀 Rodando em http://localhost:${PORT}`)
 
-  // Tracking sync once per day at 3:00 AM
-  cron.schedule('0 3 * * *', async () => {
+  // Tracking sync at 6AM and 6PM
+  cron.schedule('0 6,18 * * *', async () => {
     await orderService.syncTracking();
   });
 })

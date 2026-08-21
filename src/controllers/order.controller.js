@@ -549,3 +549,17 @@ export const addFreight = async (req, res) => {
     return res.status(500).json({ error: 'Erro ao adicionar frete ao pedido' })
   }
 }
+
+/**
+ * POST /api/orders/admin/sync-tracking
+ * Admin: dispara sincronização manual de tracking do Melhor Envio.
+ */
+export const syncTrackingManual = async (req, res) => {
+  try {
+    await orderService.syncTracking()
+    return res.status(200).json({ message: 'Sincronização de tracking concluída' })
+  } catch (error) {
+    console.error('syncTrackingManual error:', error)
+    return res.status(500).json({ error: 'Erro ao sincronizar tracking' })
+  }
+}
