@@ -563,3 +563,17 @@ export const syncTrackingManual = async (req, res) => {
     return res.status(500).json({ error: 'Erro ao sincronizar tracking' })
   }
 }
+
+/**
+ * POST /api/orders/admin/force-tracking
+ * Admin: força sincronização de tracking para pedidos pagos e entregues sem código de rastreio.
+ */
+export const forceTrackingManual = async (req, res) => {
+  try {
+    const result = await orderService.forceTrackingForPaidAndDelivered()
+    return res.status(200).json(result)
+  } catch (error) {
+    console.error('forceTrackingManual error:', error)
+    return res.status(500).json({ error: 'Erro ao forçar sincronização de tracking' })
+  }
+}

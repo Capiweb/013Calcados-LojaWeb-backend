@@ -121,7 +121,7 @@ export const createPaymentForPedido = async (pedidoId, pagamentoId, pagamentoDat
   })
 }
 
-export const findAllOrders = async ({ where = {}, orderBy = { criadoEm: 'desc' }, include = { itens: true, pagamento: true, usuario: true }, page, limit = 50 } = {}) => {
+export const findAllOrders = async ({ where = {}, orderBy = { criadoEm: 'desc' }, include = { itens: true, pagamento: true, usuario: true }, page, limit = 200 } = {}) => {
   try {
     const queryOpts = { where, orderBy, include }
     queryOpts.skip = page ? (page - 1) * limit : 0

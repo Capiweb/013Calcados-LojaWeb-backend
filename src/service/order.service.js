@@ -6,6 +6,9 @@ import { getIo } from '../utils/io.js'
 import * as shippingService from './shipping.service.js'
 import { findUserById } from '../repositories/user.repository.js'
 import * as cupomService from './cupom.service.js'
+import { PrismaClient } from '@prisma/client'
+
+const prisma = new PrismaClient()
 
 const MP_ACCESS_TOKEN = process.env.MP_ACCESS_TOKEN
 const MP_BASE = 'https://api.mercadopago.com'
@@ -973,6 +976,7 @@ export const startShipmentPurchaseJob = async (pedidoId, attempt = 0) => {
 
       await orderRepo.updateOrderShippingInfo(pedidoId, {
         melhorenvio_shipment_id: createRes.id,
+        shipping_status: createRes.status || 'pending',
         shipping_metadata: createRes
       })
     }
@@ -982,17 +986,8 @@ export const startShipmentPurchaseJob = async (pedidoId, attempt = 0) => {
       throw new Error('Shipment ID ausente')
     }
 
-    console.log('[JOB] iniciando compra da etiqueta para pedido', pedidoId, { shipmentId: freshPedido.melhorenvio_shipment_id })
-    const purchaseRes = await shippingService.purchaseShipment(freshPedido.melhorenvio_shipment_id)
-    console.log('[JOB] purchaseShipment response', { pedidoId, purchaseId: purchaseRes?.id || purchaseRes?.purchase_id, raw: purchaseRes })
-
-    await orderRepo.updateOrderShippingInfo(pedidoId, {
-      melhorenvio_purchase_id: purchaseRes.id,
-      tracking_number: purchaseRes.tracking_number || null,
-      label_url: purchaseRes.label_url || null,
-      shipping_status: 'PURCHASED',
-      shipping_metadata: purchaseRes
-    })
+    console.log('[JOB] shipment criado no carrinho para pedido', pedidoId, { shipmentId: freshPedido.melhorenvio_shipment_id, status: freshPedido.shipping_status })
+    console.log('[JOB] shipment job concluído com sucesso - etiqueta no carrinho', pedidoId)
 
   } catch (err) {
     console.error('[JOB] erro no shipment job', { pedidoId, attempt, message: err?.message, stack: err?.stack })
@@ -1020,7 +1015,8 @@ export const startShipmentPurchaseJob = async (pedidoId, attempt = 0) => {
 
 /**
  * Cria apenas o shipment no carrinho do Melhor Envio (sem comprar).
- * Usado pelo admin (botão "Retry") para pedidos PAGOS com shipping_status = 'FAILED'.
+ * Usado pelo admin (botão "Gerar") para pedidos PAGOS com shipping_status = 'FAILED'.
+ * Também usado pelo fluxo automático - não tenta comprar automaticamente.
  */
 export const retryOrderShipment = async (pedidoId) => {
   const pedido = await orderRepo.getOrderById(pedidoId)
@@ -1073,6 +1069,7 @@ export const retryOrderShipment = async (pedidoId) => {
     throw new Error('Documento do destinatário ausente. Certifique-se de que o usuário tenha CPF/CNPJ cadastrado.')
   }
 
+  // Sender document (CPF da loja) — obrigatório no Melhor Envio
   const fromDocument = (process.env.MELHOR_ENVIO_FROM_DOCUMENT || process.env.MELHOR_ENVIO_FROM_COMPANY_DOCUMENT || '').replace(/\D/g, '')
 
   const shipmentPayload = {
@@ -1119,11 +1116,11 @@ export const retryOrderShipment = async (pedidoId) => {
 
   await orderRepo.updateOrderShippingInfo(pedidoId, {
     melhorenvio_shipment_id: createRes.id,
-    shipping_status: 'PURCHASED',
+    shipping_status: createRes.status || 'PENDING_PURCHASE',
     shipping_metadata: createRes,
   })
 
-  return { message: 'Etiqueta criada no carrinho do Melhor Envio', shipment_id: createRes.id }
+  return { message: 'Etiqueta criada no carrinho do Melhor Envio', shipment_id: createRes.id, status: createRes.status }
 }
 
 export const addFreightToOrder = async (orderId, freteValue) => {
@@ -1139,8 +1136,107 @@ export const addFreightToOrder = async (orderId, freteValue) => {
 }
 
 /**
+ * forceTrackingForPaidAndDelivered — for manual tracking sync for paid and delivered orders
+ * Processes all paid and delivered orders to get their tracking codes
+ * Uses batch tracking first, then individual GET for orders without tracking
+ * ALWAYS updates metadata from GET individual to ensure consistency
+ */
+export const forceTrackingForPaidAndDelivered = async () => {
+  // Get all paid and delivered orders that have shipment ID but no tracking
+  const orders = await prisma.pedido.findMany({
+    where: {
+      status: { in: ['PAGO', 'ENTREGUE'] },
+      tracking_number: null,
+      melhorenvio_shipment_id: { not: null }
+    },
+    select: {
+      id: true,
+      status: true,
+      melhorenvio_shipment_id: true,
+      tracking_number: true,
+      shipping_status: true,
+      atualizadoEm: true
+    }
+  })
+
+  console.log(`[forceTrackingForPaidAndDelivered] ${orders.length} pedidos pagos/entregues sem tracking`)
+  console.log(`[forceTrackingForPaidAndDelivered] pedidos:`, orders.map(o => ({ id: o.id, shipmentId: o.melhorenvio_shipment_id, currentStatus: o.shipping_status })))
+
+  if (orders.length === 0) return { message: 'Nenhum pedido precisa de tracking', count: 0 }
+
+  const shipmentIds = orders.map(o => o.melhorenvio_shipment_id)
+
+  let trackingMap = {}
+  try {
+    const batchResult = await shippingService.getTrackingBatch(shipmentIds)
+    if (batchResult && typeof batchResult === 'object') {
+      trackingMap = batchResult
+    }
+    console.log(`[forceTrackingForPaidAndDelivered] ME retornou tracking para ${Object.keys(trackingMap).length} shipments`)
+  } catch (err) {
+    console.error('forceTrackingForPaidAndDelivered: getTrackingBatch failed:', err.message)
+    // Continua mesmo se batch falhar, vai tentar GET individual
+  }
+
+  let atualizados = 0
+  for (const order of orders) {
+    try {
+      const info = trackingMap[order.melhorenvio_shipment_id]
+      let trackingCode = info?.tracking || null
+      let meStatus = info?.status || null
+      let fullMetadata = info || null
+
+      // SEMPRE tenta GET individual para garantir metadata atualizado
+      console.log(`[forceTrackingForPaidAndDelivered] pedido ${order.id}: forçando GET individual para shipment ${order.melhorenvio_shipment_id}`)
+      try {
+        const detailedInfo = await shippingService.getShipment(order.melhorenvio_shipment_id)
+        if (detailedInfo) {
+          trackingCode = detailedInfo.tracking || trackingCode
+          meStatus = detailedInfo.status || meStatus
+          fullMetadata = detailedInfo
+          console.log(`[forceTrackingForPaidAndDelivered] GET individual retornou: status=${meStatus}, tracking=${trackingCode}, protocol=${detailedInfo.protocol}, id=${detailedInfo.id}`)
+        } else {
+          console.log(`[forceTrackingForPaidAndDelivered] GET individual retornou null para shipment ${order.melhorenvio_shipment_id}`)
+        }
+      } catch (err) {
+        console.error(`[forceTrackingForPaidAndDelivered] erro no GET individual para pedido ${order.id} shipment ${order.melhorenvio_shipment_id}:`, err.message)
+        console.error(`[forceTrackingForPaidAndDelivered] erro completo:`, err)
+      }
+
+      const shippingUpdate = {
+        tracking_number: trackingCode,
+        shipping_status: meStatus || order.shipping_status
+      }
+
+      // Sempre atualiza o metadata com o resultado mais recente
+      if (fullMetadata) {
+        shippingUpdate.shipping_metadata = fullMetadata
+      }
+
+      await orderRepo.updateOrderShippingInfo(order.id, shippingUpdate)
+      atualizados++
+      
+      // Atualizar status do pedido para ENVIADO se estava PAGO e agora tem tracking
+      if (trackingCode && order.status === 'PAGO') {
+        await orderRepo.updateOrderStatus(order.id, 'ENVIADO')
+        console.log(`[forceTrackingForPaidAndDelivered] pedido ${order.id} → ENVIADO (tracking: ${trackingCode})`)
+      }
+      
+      console.log(`[forceTrackingForPaidAndDelivered] pedido ${order.id} atualizado: tracking=${trackingCode}, status=${meStatus}`)
+    } catch (error) {
+      console.error(`forceTrackingForPaidAndDelivered: erro no pedido ${order.id}:`, error.message)
+      console.error(`forceTrackingForPaidAndDelivered] erro completo:`, error)
+    }
+  }
+
+  return { message: `${atualizados} pedidos atualizados com metadata completo`, count: atualizados }
+}
+
+/**
  * syncTracking — runs on cron (every hour).
  * Uses POST /v2/me/shipment/tracking (batch) to check all active orders at once.
+ * For orders without tracking, uses GET /v2/me/orders/{id} to get detailed info.
+ * ALWAYS updates metadata from GET individual to ensure consistency.
  * ME statuses: pending → released → posted → delivered | undelivered | suspended
  *   pending   = in cart, label not purchased yet
  *   released  = label purchased, tracking code assigned
@@ -1148,9 +1244,14 @@ export const addFreightToOrder = async (orderId, freteValue) => {
  *   delivered = delivered to recipient
  */
 export const syncTracking = async () => {
+  // Get orders with shipment ID (already in ME system)
   const orders = await orderRepo.getOrdersWithShipmentId()
   console.log(`[syncTracking] ${orders.length} pedidos ativos com shipment ID`)
-  if (orders.length === 0) return
+  
+  if (orders.length === 0) {
+    console.log('[syncTracking] Nenhum pedido com shipment ID para processar')
+    return
+  }
 
   const shipmentIds = orders.map(o => o.melhorenvio_shipment_id)
 
@@ -1163,20 +1264,32 @@ export const syncTracking = async () => {
     console.log(`[syncTracking] ME retornou tracking para ${Object.keys(trackingMap).length} shipments`)
   } catch (err) {
     console.error('syncTracking: getTrackingBatch failed:', err.message)
-    return
+    // Continua mesmo se batch falhar, vai tentar GET individual
   }
 
   let atualizados = 0
   for (const order of orders) {
     try {
       const info = trackingMap[order.melhorenvio_shipment_id]
-      if (!info) {
-        console.log(`[syncTracking] shipment ${order.melhorenvio_shipment_id} (pedido ${order.id}) não retornado pelo ME`)
-        continue
-      }
+      let meStatus = info?.status || null
+      let trackingCode = info?.tracking || null
+      let fullMetadata = info || null
 
-      const meStatus = info.status || null
-      const trackingCode = info.tracking || null
+      // Se o batch não retornou tracking ou status, tenta GET individual
+      if (!info || !trackingCode) {
+        console.log(`[syncTracking] shipment ${order.melhorenvio_shipment_id} (pedido ${order.id}) sem tracking no batch, tentando GET individual`)
+        try {
+          const detailedInfo = await shippingService.getShipment(order.melhorenvio_shipment_id)
+          if (detailedInfo) {
+            meStatus = detailedInfo.status || meStatus
+            trackingCode = detailedInfo.tracking || trackingCode
+            fullMetadata = detailedInfo
+            console.log(`[syncTracking] GET individual retornou: status=${meStatus}, tracking=${trackingCode}, protocol=${detailedInfo.protocol}`)
+          }
+        } catch (err) {
+          console.error(`[syncTracking] erro no GET individual para pedido ${order.id}:`, err.message)
+        }
+      }
 
       console.log(`[syncTracking] pedido ${order.id} shipment=${order.melhorenvio_shipment_id} meStatus=${meStatus} tracking=${trackingCode}`)
 
@@ -1190,6 +1303,11 @@ export const syncTracking = async () => {
         shippingUpdate.tracking_number = trackingCode
       }
 
+      // Sempre atualiza o metadata quando tem GET individual
+      if (fullMetadata && (!info || !trackingCode)) {
+        shippingUpdate.shipping_metadata = fullMetadata
+      }
+
       if (Object.keys(shippingUpdate).length > 0) {
         await orderRepo.updateOrderShippingInfo(order.id, shippingUpdate)
         atualizados++
@@ -1198,7 +1316,7 @@ export const syncTracking = async () => {
       if (meStatus === 'delivered' && order.status !== 'ENTREGUE') {
         await orderRepo.updateOrderStatus(order.id, 'ENTREGUE')
         console.log(`syncTracking: pedido ${order.id} → ENTREGUE (tracking: ${trackingCode})`)
-      } else if (meStatus === 'posted' && order.status === 'PAGO') {
+      } else if ((meStatus === 'posted' || trackingCode) && order.status === 'PAGO') {
         await orderRepo.updateOrderStatus(order.id, 'ENVIADO')
         console.log(`syncTracking: pedido ${order.id} → ENVIADO (tracking: ${trackingCode})`)
       }
