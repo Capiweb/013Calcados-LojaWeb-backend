@@ -113,14 +113,21 @@ export const calculateShipping = async (userId, postalCode) => {
         .map(Number)
 
       if (allowedServices.length > 0) {
+        // Se configurado, filtra apenas pelos IDs especificados
         data = data.filter(carrier => allowedServices.includes(Number(carrier.id)))
       } else {
-        // Apenas Correios por padrão (PAC e SEDEX) — transportadoras que funcionam
-        // sem contrato adicional, CNPJ, CNAE ou agência.
-        // Outras (Jadlog, Azul, LATAM, Buslog, Loggi, J&T) exigem dados extras
-        // que frequentemente causam falha na criação da etiqueta.
+        // Por padrão, aceita transportadoras que funcionam sem contrato adicional
+        // Inclui Correios, Jadlog, Azul, LATAM, Buslog, Loggi, J&T, etc.
+        // Transportadoras que geralmente funcionam com configuração básica
         const allowedCompanies = [
-          'correios'
+          'correios',
+          'jadlog',
+          'azul',
+          'latam',
+          'buslog',
+          'loggi',
+          'j&t',
+          'jt'
         ]
         data = data.filter(carrier => {
           const companyName = (carrier.company?.name || carrier.company || '').toLowerCase().trim()
